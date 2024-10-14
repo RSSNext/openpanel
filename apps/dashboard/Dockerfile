@@ -16,8 +16,8 @@ ENV PATH="$PNPM_HOME:$PATH"
 # Install necessary dependencies for prisma
 RUN apt-get update && apt-get install -y \
     openssl \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+    libssl3 &&
+    rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
 
@@ -54,8 +54,7 @@ WORKDIR /app/apps/dashboard
 
 # Will be replaced on runtime
 ENV NEXT_PUBLIC_DASHBOARD_URL="__NEXT_PUBLIC_DASHBOARD_URL__"
-ENV NEXT_PUBLIC_API_URL="__NEXT_PUBLIC_API_URL__"
-ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_eW9sby5jb20k"
+
 # Does not need to be replaced
 ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL="/login"
 ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL="/register"

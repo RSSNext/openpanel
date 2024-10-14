@@ -175,22 +175,22 @@ async function start() {
     type: CronQueueType;
     pattern: string | number;
   }[] = [
-    {
-      name: 'salt',
-      type: 'salt',
-      pattern: '0 0 * * *',
-    },
-    {
-      name: 'flush',
-      type: 'flushEvents',
-      pattern: 1000 * 10,
-    },
-    {
-      name: 'flush',
-      type: 'flushProfiles',
-      pattern: 1000 * 60,
-    },
-  ];
+      {
+        name: 'salt',
+        type: 'salt',
+        pattern: '0 0 * * *',
+      },
+      {
+        name: 'flush',
+        type: 'flushEvents',
+        pattern: 1000 * 10,
+      },
+      {
+        name: 'flush',
+        type: 'flushProfiles',
+        pattern: 1000 * 60,
+      },
+    ];
 
   if (process.env.SELF_HOSTED && process.env.NODE_ENV === 'production') {
     jobs.push({
@@ -213,11 +213,11 @@ async function start() {
         repeat:
           typeof job.pattern === 'number'
             ? {
-                every: job.pattern,
-              }
+              every: job.pattern,
+            }
             : {
-                pattern: job.pattern,
-              },
+              pattern: job.pattern,
+            },
       },
     );
   }
@@ -240,7 +240,7 @@ async function start() {
     }
   }
 
-  await createInitialSalts();
+  // await createInitialSalts();
 }
 
 start();

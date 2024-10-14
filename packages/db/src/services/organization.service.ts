@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 
 import type { Organization, Prisma, ProjectAccess } from '../prisma-client';
 import { db } from '../prisma-client';
@@ -22,17 +21,7 @@ export function transformOrganization(org: Organization) {
 }
 
 export async function getCurrentOrganizations() {
-  const session = auth();
-  if (!session.userId) return [];
-
   const organizations = await db.organization.findMany({
-    where: {
-      members: {
-        some: {
-          userId: session.userId,
-        },
-      },
-    },
     orderBy: {
       createdAt: 'desc',
     },

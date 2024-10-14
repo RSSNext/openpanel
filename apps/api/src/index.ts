@@ -1,5 +1,4 @@
 import zlib from 'node:zlib';
-import { clerkPlugin } from '@clerk/fastify';
 import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -177,10 +176,6 @@ const startServer = async () => {
         secret: 'random', // for cookies signature
         hook: 'onRequest',
       });
-      instance.register(clerkPlugin, {
-        publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-        secretKey: process.env.CLERK_SECRET_KEY,
-      });
       instance.register(fastifyTRPCPlugin, {
         prefix: '/trpc',
         trpcOptions: {
@@ -239,27 +234,27 @@ const startServer = async () => {
       reply.status(status).send({
         redis: redisRes
           ? {
-              ok: !!redisRes.data.length,
-              time: `${redisRes.time}ms`,
-            }
+            ok: !!redisRes.data.length,
+            time: `${redisRes.time}ms`,
+          }
           : null,
         db: dbRes
           ? {
-              ok: !!dbRes.data,
-              time: `${dbRes.time}ms`,
-            }
+            ok: !!dbRes.data,
+            time: `${dbRes.time}ms`,
+          }
           : null,
         queue: queueRes
           ? {
-              ok: !!queueRes.data,
-              time: `${queueRes.time}ms`,
-            }
+            ok: !!queueRes.data,
+            time: `${queueRes.time}ms`,
+          }
           : null,
         ch: chRes
           ? {
-              ok: !!chRes.data,
-              time: `${chRes.time}ms`,
-            }
+            ok: !!chRes.data,
+            time: `${chRes.time}ms`,
+          }
           : null,
       });
     });

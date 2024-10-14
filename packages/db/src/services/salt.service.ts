@@ -17,24 +17,24 @@ export async function getCurrentSalt() {
 }
 
 export async function getSalts() {
-  const [curr, prev] = await db.salt.findMany({
-    orderBy: {
-      createdAt: 'desc',
-    },
-    take: 2,
-  });
+  // const [curr, prev] = await db.salt.findMany({
+  //   orderBy: {
+  //     createdAt: 'desc',
+  //   },
+  //   take: 2,
+  // });
 
-  if (!curr) {
-    throw new Error('No salt found');
-  }
+  // if (!curr) {
+  //   throw new Error('No salt found');
+  // }
 
-  if (!prev) {
-    throw new Error('No salt found');
-  }
+  // if (!prev) {
+  //   throw new Error('No salt found');
+  // }
 
   return {
-    current: curr.salt,
-    previous: prev.salt,
+    // current: curr.salt,
+    // previous: prev.salt,
   };
 }
 
@@ -43,7 +43,7 @@ export async function createInitialSalts() {
   const BASE_DELAY = 1000; // 1 second
   const createSaltsWithRetry = async (retryCount = 0): Promise<void> => {
     try {
-      await getSalts();
+      // await getSalts();
     } catch (error) {
       if (error instanceof Error && error.message === 'No salt found') {
         console.log('Creating salts for the first time');

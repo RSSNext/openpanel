@@ -1,4 +1,4 @@
-import { validateClerkJwt } from '@/utils/auth';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import superjson from 'superjson';
 import type * as WebSocket from 'ws';
@@ -124,7 +124,7 @@ export async function wsProjectEvents(
   }>,
 ) {
   const { params, query } = req;
-  const { token } = query;
+
   const type = query.type || 'saved';
   if (!['saved', 'received'].includes(type)) {
     connection.socket.send('Invalid type');
@@ -132,12 +132,6 @@ export async function wsProjectEvents(
     return;
   }
   const subscribeToEvent = `event:${type}`;
-  const decoded = validateClerkJwt(token);
-  const userId = decoded?.sub;
-  const access = await getProjectAccess({
-    userId: userId!,
-    projectId: params.projectId,
-  });
 
   getRedisSub().subscribe(subscribeToEvent);
 
@@ -151,12 +145,10 @@ export async function wsProjectEvents(
         );
         connection.socket.send(
           superjson.stringify(
-            access
-              ? {
-                  ...event,
-                  profile,
-                }
-              : transformMinimalEvent(event),
+            {
+              ...event,
+              profile,
+            }
           ),
         );
       }
@@ -193,18 +185,6 @@ export async function wsProjectNotifications(
   }
 
   const subscribeToEvent = 'notification';
-  const decoded = validateClerkJwt(query.token);
-  const userId = decoded?.sub;
-  const access = await getProjectAccess({
-    userId: userId!,
-    projectId: params.projectId,
-  });
-
-  if (!access) {
-    connection.socket.send('No access');
-    connection.socket.close();
-    return;
-  }
 
   getRedisSub().subscribe(subscribeToEvent);
 

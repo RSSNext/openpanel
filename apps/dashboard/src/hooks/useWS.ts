@@ -1,8 +1,7 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
 import debounce from 'lodash.debounce';
-import { use, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 
 import { getSuperJson } from '@openpanel/common';
@@ -18,7 +17,6 @@ export default function useWS<T>(
   onMessage: (event: T) => void,
   options?: UseWSOptions,
 ) {
-  const auth = useAuth();
   const ws = String(process.env.NEXT_PUBLIC_API_URL)
     .replace(/^https/, 'wss')
     .replace(/^http/, 'ws');
@@ -39,11 +37,6 @@ export default function useWS<T>(
     return onMessage;
   }, [options?.debounce?.delay]);
 
-  useEffect(() => {
-    if (auth.isSignedIn) {
-      auth.getToken().then(setToken);
-    }
-  }, [auth]);
 
   useEffect(() => {
     if (baseUrl === `${ws}${path}`) return;

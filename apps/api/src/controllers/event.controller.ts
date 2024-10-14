@@ -26,13 +26,11 @@ export async function postEvent(
 
   const [salts, geo] = await Promise.all([getSalts(), parseIp(ip)]);
   const currentDeviceId = generateDeviceId({
-    salt: salts.current,
     origin: projectId,
     ip,
     ua,
   });
   const previousDeviceId = generateDeviceId({
-    salt: salts.previous,
     origin: projectId,
     ip,
     ua,

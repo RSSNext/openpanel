@@ -116,9 +116,6 @@ function writeEnvFile(envs: {
   REDIS_URL: string;
   DATABASE_URL: string;
   DOMAIN_NAME: string;
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: string;
-  CLERK_SECRET_KEY: string;
-  CLERK_SIGNING_SECRET: string;
 }) {
   const envTemplatePath = path.resolve(__dirname, '.env.template');
   const envPath = path.resolve(__dirname, '.env');
@@ -134,12 +131,7 @@ function writeEnvFile(envs: {
       '$NEXT_PUBLIC_API_URL',
       `${stripTrailingSlash(envs.DOMAIN_NAME)}/api`,
     )
-    .replace(
-      '$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-      envs.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-    )
-    .replace('$CLERK_SECRET_KEY', envs.CLERK_SECRET_KEY)
-    .replace('$CLERK_SIGNING_SECRET', envs.CLERK_SIGNING_SECRET);
+
 
   fs.writeFileSync(
     envPath,
@@ -170,8 +162,6 @@ async function initiateOnboarding() {
     `${T}1. Docker and Docker Compose installed on your machine.`,
     `${T}2. A domain name that you can use for this setup and point it to this machine's ip`,
     `${T}3. A Clerk.com account`,
-    `${T}${T}- If you don't have one, you can create one at https://clerk.dev`,
-    `${T}${T}- We'll need NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, CLERK_SIGNING_SECRET`,
     `${T}${T}- Create a webhook pointing to https://your_domain/api/webhook/clerk\n`,
     'For more information you can read our article on self-hosting at https://docs.openpanel.dev/docs/self-hosting\n',
   ];
@@ -279,50 +269,7 @@ async function initiateOnboarding() {
     },
   ]);
 
-  // Clerk
-
-  const clerkResponse = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-      message: 'Enter your Clerk Publishable Key:',
-      default: process.env.DEBUG ? 'pk_test_1234567890' : undefined,
-      validate: (value) => {
-        if (value.startsWith('pk_live_') || value.startsWith('pk_test_')) {
-          return true;
-        }
-
-        return 'Please enter a valid Clerk Publishable Key. Should start with "pk_live_" or "pk_test_"';
-      },
-    },
-    {
-      type: 'input',
-      name: 'CLERK_SECRET_KEY',
-      message: 'Enter your Clerk Secret Key:',
-      default: process.env.DEBUG ? 'sk_test_1234567890' : undefined,
-      validate: (value) => {
-        if (value.startsWith('sk_live_') || value.startsWith('sk_test_')) {
-          return true;
-        }
-
-        return 'Please enter a valid Clerk Secret Key. Should start with "sk_live_" or "sk_test_"';
-      },
-    },
-    {
-      type: 'input',
-      name: 'CLERK_SIGNING_SECRET',
-      message: 'Enter your Clerk Signing Secret:',
-      default: process.env.DEBUG ? 'whsec_1234567890' : undefined,
-      validate: (value) => {
-        if (value.startsWith('whsec_')) {
-          return true;
-        }
-
-        return 'Please enter a valid Clerk Signing Secret. Should start with "whsec_"';
-      },
-    },
-  ]);
-
+ 
   // OS
 
   const cpus = await inquirer.prompt([
@@ -379,10 +326,6 @@ async function initiateOnboarding() {
       envs.DATABASE_URL ||
       'postgresql://postgres:postgres@op-db:5432/postgres?schema=public',
     DOMAIN_NAME: domainNameResponse.domainName,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      clerkResponse.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '',
-    CLERK_SECRET_KEY: clerkResponse.CLERK_SECRET_KEY || '',
-    CLERK_SIGNING_SECRET: clerkResponse.CLERK_SIGNING_SECRET || '',
   });
 
   console.log('Updating docker-compose.yml file...\n');

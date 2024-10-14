@@ -8,7 +8,7 @@ import {
 
 import LayoutContent from './layout-content';
 import { LayoutSidebar } from './layout-sidebar';
-import SideEffects from './side-effects';
+
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -56,7 +56,7 @@ export default async function AppLayout({
         }}
       />
       <LayoutContent>{children}</LayoutContent>
-      <SideEffects />
+
     </div>
   );
 }

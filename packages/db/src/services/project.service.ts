@@ -1,5 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
-
 import { cacheable } from '@openpanel/redis';
 import type { Prisma, Project } from '../prisma-client';
 import { db } from '../prisma-client';
@@ -56,10 +54,6 @@ export async function getProjectsByOrganizationSlug(organizationSlug: string) {
 }
 
 export async function getCurrentProjects(organizationSlug: string) {
-  const session = auth();
-  if (!session.userId) {
-    return [];
-  }
 
   const [projects, members, access] = await Promise.all([
     db.project.findMany({
@@ -72,13 +66,11 @@ export async function getCurrentProjects(organizationSlug: string) {
     }),
     db.member.findMany({
       where: {
-        userId: session.userId,
         organizationId: organizationSlug,
       },
     }),
     db.projectAccess.findMany({
       where: {
-        userId: session.userId,
         organizationId: organizationSlug,
       },
     }),

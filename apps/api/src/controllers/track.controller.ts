@@ -51,8 +51,8 @@ function getIdentity(body: TrackHandlerPayload): IdentifyPayload | undefined {
     identity ||
     (body.payload.profileId
       ? {
-          profileId: body.payload.profileId,
-        }
+        profileId: body.payload.profileId,
+      }
       : undefined)
   );
 }
@@ -75,37 +75,36 @@ export async function handler(
   }
 
   const identity = getIdentity(request.body);
-  const profileId = identity?.profileId
-    ? await getProfileIdCached({
-        projectId,
-        profileId: identity?.profileId,
-      })
-    : undefined;
+  // const profileId = identity?.profileId
+  //   ? await getProfileIdCached({
+  //       projectId,
+  //       profileId: identity?.profileId,
+  //     })
+  //   : undefined;
 
   // We might get a profileId from the alias table
   // If we do, we should use that instead of the one from the payload
-  if (profileId) {
-    request.body.payload.profileId = profileId;
-  }
+  // if (profileId) {
+  //   request.body.payload.profileId = profileId;
+  // }
 
+  request.body.payload.profileId = '1'
   switch (request.body.type) {
     case 'track': {
-      const [salts, geo] = await Promise.all([getSalts(), parseIp(ip)]);
+      const [_salts, geo] = await Promise.all([Promise.resolve(), parseIp(ip)]);
       const currentDeviceId = ua
         ? generateDeviceId({
-            salt: salts.current,
-            origin: projectId,
-            ip,
-            ua,
-          })
+          origin: projectId,
+          ip,
+          ua,
+        })
         : '';
       const previousDeviceId = ua
         ? generateDeviceId({
-            salt: salts.previous,
-            origin: projectId,
-            ip,
-            ua,
-          })
+          origin: projectId,
+          ip,
+          ua,
+        })
         : '';
 
       const promises = [

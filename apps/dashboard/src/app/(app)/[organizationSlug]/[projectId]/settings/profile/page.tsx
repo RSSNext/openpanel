@@ -1,13 +1,17 @@
 import { Padding } from '@/components/ui/padding';
-import { auth } from '@clerk/nextjs/server';
-
-import { getUserById } from '@openpanel/db';
 
 import EditProfile from './edit-profile';
 
 export default async function Page() {
-  const { userId } = auth();
-  const profile = await getUserById(userId!);
+  const profile = {
+    id: '1',
+    email: 'follow@team.com',
+    firstName: 'Follow',
+    lastName: 'Team',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  };
 
   return (
     <Padding>

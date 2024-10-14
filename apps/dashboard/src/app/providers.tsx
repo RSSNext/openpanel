@@ -5,7 +5,7 @@ import { ModalProvider } from '@/modals';
 import type { AppStore } from '@/redux';
 import makeStore from '@/redux';
 import { api } from '@/trpc/client';
-import { ClerkProvider, useAuth } from '@clerk/nextjs';
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpLink } from '@trpc/client';
 import { ThemeProvider } from 'next-themes';
@@ -19,7 +19,7 @@ import { NotificationProvider } from '@/components/notifications/notification-pr
 import { OpenPanelComponent } from '@openpanel/nextjs';
 
 function AllProviders({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth();
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -38,15 +38,6 @@ function AllProviders({ children }: { children: React.ReactNode }) {
       links: [
         httpLink({
           url: `${process.env.NEXT_PUBLIC_API_URL}/trpc`,
-          async headers() {
-            const token = await getToken();
-            if (token) {
-              return {
-                Authorization: `Bearer ${token}`,
-              };
-            }
-            return {};
-          },
         }),
       ],
     }),
@@ -90,8 +81,6 @@ function AllProviders({ children }: { children: React.ReactNode }) {
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
-      <AllProviders>{children}</AllProviders>
-    </ClerkProvider>
+    <AllProviders>{children}</AllProviders>
   );
 }

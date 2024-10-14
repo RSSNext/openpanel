@@ -105,6 +105,7 @@ export async function validateSdkRequest(
     }
   }
 
+  console.log(client, clientSecret, clientId, origin);
   throw createError('Ingestion: Invalid cors or secret');
 }
 
@@ -168,22 +169,3 @@ export async function validateImportRequest(
   return client;
 }
 
-export function validateClerkJwt(token?: string) {
-  if (!token) {
-    return null;
-  }
-  try {
-    const decoded = jwt.verify(
-      token,
-      process.env.CLERK_PUBLIC_PEM_KEY!.replace(/\\n/g, '\n'),
-    );
-
-    if (typeof decoded === 'object') {
-      return decoded;
-    }
-  } catch (e) {
-    //
-  }
-
-  return null;
-}

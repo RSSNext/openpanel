@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { useAppParams } from '@/hooks/useAppParams';
 import { pushModal } from '@/modals';
 import { cn } from '@/utils/cn';
-import { useUser } from '@clerk/nextjs';
 import {
   GanttChartIcon,
   Globe2Icon,
@@ -56,27 +55,8 @@ interface LayoutMenuProps {
   dashboards: IServiceDashboards;
 }
 export default function LayoutMenu({ dashboards }: LayoutMenuProps) {
-  const { user } = useUser();
-
   const params = useAppParams();
-  const hasProjectId =
-    params.projectId &&
-    params.projectId !== 'null' &&
-    params.projectId !== 'undefined';
-  const projectId = hasProjectId
-    ? params.projectId
-    : (user?.unsafeMetadata.projectId as string);
-
-  useEffect(() => {
-    if (hasProjectId) {
-      user?.update({
-        unsafeMetadata: {
-          ...user.unsafeMetadata,
-          projectId: params.projectId,
-        },
-      });
-    }
-  }, [params.projectId, hasProjectId]);
+  const projectId = params.projectId
 
   return (
     <>
