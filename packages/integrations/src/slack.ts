@@ -8,6 +8,9 @@ export const createSlackInstaller = () => {
   const SLACK_CLIENT_ID = process.env.SLACK_CLIENT_ID;
   const SLACK_CLIENT_SECRET = process.env.SLACK_CLIENT_SECRET;
   const SLACK_STATE_SECRET = process.env.SLACK_STATE_SECRET;
+  if (!SLACK_CLIENT_ID || !SLACK_CLIENT_SECRET || !SLACK_STATE_SECRET) {
+    return null
+  }
   const slackInstaller = new InstallProvider({
     clientId: SLACK_CLIENT_ID!,
     clientSecret: SLACK_CLIENT_SECRET!,
@@ -24,6 +27,9 @@ export const getSlackInstallUrl = ({
 }: { integrationId: string; organizationId: string; projectId: string }) => {
 
   const slackInstaller = createSlackInstaller();
+  if (!slackInstaller) {
+    return null;
+  }
   return slackInstaller.generateInstallUrl({
     scopes: [
       'incoming-webhook',

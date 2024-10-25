@@ -186,6 +186,10 @@ export async function slackWebhook(
     return reply.status(400).send({ error: 'Invalid params' });
   }
   const slackInstaller = createSlackInstaller();
+  if (!slackInstaller) {
+    request.log.error('Slack installer not found');
+    return reply.status(500).send({ error: 'Slack installer not found' });
+  }
 
   const veryfiedState = await slackInstaller.stateStore?.verifyStateParam(
     new Date(),
