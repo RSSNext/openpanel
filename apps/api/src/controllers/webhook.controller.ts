@@ -3,8 +3,9 @@ import path from 'node:path';
 import type { WebhookEvent } from '@clerk/fastify';
 import { AccessLevel, db } from '@openpanel/db';
 import {
+  createSlackInstaller,
   sendSlackNotification,
-  slackInstaller,
+
 } from '@openpanel/integrations/src/slack';
 import { getRedisPub } from '@openpanel/redis';
 import { zSlackAuthResponse } from '@openpanel/validation';
@@ -184,6 +185,7 @@ export async function slackWebhook(
     request.log.error(parsedParams.error, 'Invalid params');
     return reply.status(400).send({ error: 'Invalid params' });
   }
+  const slackInstaller = createSlackInstaller();
 
   const veryfiedState = await slackInstaller.stateStore?.verifyStateParam(
     new Date(),
