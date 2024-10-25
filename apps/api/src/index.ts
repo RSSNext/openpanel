@@ -294,7 +294,7 @@ const startServer = async () => {
     });
 
     // Notify when keys expires
-    getRedisPub().config('SET', 'notify-keyspace-events', 'Ex');
+    // getRedisPub().config('SET', 'notify-keyspace-events', 'Ex');
   } catch (error) {
     logger.error('Failed to start server', error);
   }
