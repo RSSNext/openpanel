@@ -19,10 +19,14 @@ import { RedisBuffer } from './buffer';
 
 const STALLED_QUEUE_TIMEOUT = 1000 * 60 * 60 * 24;
 
+const BATCH_SIZE = process.env.BATCH_SIZE
+  ? Number.parseInt(process.env.BATCH_SIZE, 10)
+  : 50;
+
 type BufferType = IClickhouseEvent;
 export class EventBuffer extends RedisBuffer<BufferType> {
   constructor() {
-    super(TABLE_NAMES.events, null);
+    super(TABLE_NAMES.events, BATCH_SIZE);
   }
 
   getLastEventKey({
@@ -190,7 +194,7 @@ export class EventBuffer extends RedisBuffer<BufferType> {
       if (
         !toInsert.find((i) => i.id === item.id) &&
         convertClickhouseDateToJs(item.created_at).getTime() <
-          new Date().getTime() - STALLED_QUEUE_TIMEOUT
+        new Date().getTime() - STALLED_QUEUE_TIMEOUT
       ) {
         toStalled.push(item);
       }

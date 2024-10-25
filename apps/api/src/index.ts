@@ -239,27 +239,27 @@ const startServer = async () => {
       reply.status(status).send({
         redis: redisRes
           ? {
-              ok: !!redisRes.data.length,
-              time: `${redisRes.time}ms`,
-            }
+            ok: !!redisRes.data.length,
+            time: `${redisRes.time}ms`,
+          }
           : null,
         db: dbRes
           ? {
-              ok: !!dbRes.data,
-              time: `${dbRes.time}ms`,
-            }
+            ok: !!dbRes.data,
+            time: `${dbRes.time}ms`,
+          }
           : null,
         queue: queueRes
           ? {
-              ok: !!queueRes.data,
-              time: `${queueRes.time}ms`,
-            }
+            ok: !!queueRes.data,
+            time: `${queueRes.time}ms`,
+          }
           : null,
         ch: chRes
           ? {
-              ok: !!chRes.data,
-              time: `${chRes.time}ms`,
-            }
+            ok: !!chRes.data,
+            time: `${chRes.time}ms`,
+          }
           : null,
       });
     });
@@ -294,7 +294,7 @@ const startServer = async () => {
     });
 
     // Notify when keys expires
-    // getRedisPub().config('SET', 'notify-keyspace-events', 'Ex');
+    getRedisPub().config('SET', 'notify-keyspace-events', 'Ex');
   } catch (error) {
     logger.error('Failed to start server', error);
   }
