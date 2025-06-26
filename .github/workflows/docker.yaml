@@ -3,6 +3,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'apps/api/**'
+      - 'apps/worker/**'
+      - 'apps/public/**'
+      - 'packages/**'
+      - '!packages/sdks/**'
+      - '**Dockerfile'
+      - '.github/workflows/**'
 permissions:
   packages: write
   contents: read
