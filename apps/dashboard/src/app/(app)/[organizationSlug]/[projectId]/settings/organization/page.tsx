@@ -1,16 +1,20 @@
 import { FullPageEmptyState } from '@/components/full-page-empty-state';
 import { PageTabs, PageTabsLink } from '@/components/page-tabs';
 import { Padding } from '@/components/ui/padding';
-import { auth } from '@clerk/nextjs/server';
 import { ShieldAlertIcon } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { parseAsStringEnum } from 'nuqs/server';
 
+import { auth } from '@openpanel/auth/nextjs';
 import { db } from '@openpanel/db';
 
-import EditOrganization from './edit-organization';
 import InvitesServer from './invites';
 import MembersServer from './members';
+import Billing from './organization/billing';
+import { BillingFaq } from './organization/billing-faq';
+import CurrentSubscription from './organization/current-subscription';
+import Organization from './organization/organization';
+import Usage from './organization/usage';
 
 interface PageProps {
   params: {
@@ -20,16 +24,17 @@ interface PageProps {
 }
 
 export default async function Page({
-  params: { organizationSlug },
+  params: { organizationSlug: organizationId },
   searchParams,
 }: PageProps) {
-  const tab = parseAsStringEnum(['org', 'members', 'invites'])
+  const isBillingEnabled = process.env.NEXT_PUBLIC_SELF_HOSTED !== 'true';
+  const tab = parseAsStringEnum(['org', 'billing', 'members', 'invites'])
     .withDefault('org')
     .parseServerSide(searchParams.tab);
-  const session = auth();
+  const session = await auth();
   const organization = await db.organization.findUnique({
     where: {
-      id: organizationSlug,
+      id: organizationId,
       members: {
         some: {
           userId: session.userId,
@@ -71,6 +76,11 @@ export default async function Page({
         <PageTabsLink href={'?tab=org'} isActive={tab === 'org'}>
           Organization
         </PageTabsLink>
+        {isBillingEnabled && (
+          <PageTabsLink href={'?tab=billing'} isActive={tab === 'billing'}>
+            Billing
+          </PageTabsLink>
+        )}
         <PageTabsLink href={'?tab=members'} isActive={tab === 'members'}>
           Members
         </PageTabsLink>
@@ -79,13 +89,19 @@ export default async function Page({
         </PageTabsLink>
       </PageTabs>
 
-      {tab === 'org' && <EditOrganization organization={organization} />}
-      {tab === 'members' && (
-        <MembersServer organizationSlug={organizationSlug} />
+      {tab === 'org' && <Organization organization={organization} />}
+      {tab === 'billing' && isBillingEnabled && (
+        <div className="flex flex-col-reverse md:flex-row gap-8 max-w-screen-lg">
+          <div className="col gap-8 w-full">
+            <Billing organization={organization} />
+            <Usage organization={organization} />
+            <BillingFaq />
+          </div>
+          <CurrentSubscription organization={organization} />
+        </div>
       )}
-      {tab === 'invites' && (
-        <InvitesServer organizationSlug={organizationSlug} />
-      )}
+      {tab === 'members' && <MembersServer organizationId={organizationId} />}
+      {tab === 'invites' && <InvitesServer organizationId={organizationId} />}
     </Padding>
   );
 }

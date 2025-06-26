@@ -1,5 +1,4 @@
 import { cn } from '@/utils/cn';
-import type React from 'react';
 
 export const Grid: React.FC<
   React.HTMLAttributes<HTMLDivElement> & { columns: number }
@@ -67,7 +66,7 @@ export const GridCell: React.FC<
     )}
     {...props}
   >
-    {children}
+    <div className="truncate w-full">{children}</div>
   </Component>
 );
 

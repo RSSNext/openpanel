@@ -1,28 +1,14 @@
-/**
- * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
- * for Docker builds.
- */
-await import('./src/env.mjs');
+import { createMDX } from 'fumadocs-mdx/next';
 
-/** @type {import("next").NextConfig} */
+const withMDX = createMDX();
+
+/** @type {import('next').NextConfig} */
 const config = {
-  reactStrictMode: true,
-  transpilePackages: ['@openpanel/queue'],
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
-  experimental: {
-    // Avoid "Critical dependency: the request of a dependency is an expression"
-    serverComponentsExternalPackages: ['bullmq'],
+  reactStrictMode: false,
+  images: {
+    domains: ['localhost', 'openpanel.dev', 'api.openpanel.dev'],
   },
-  /**
-   * If you are using `appDir` then you must comment the below `i18n` config out.
-   *
-   * @see https://github.com/vercel/next.js/issues/41980
-   */
-  i18n: {
-    locales: ['en'],
-    defaultLocale: 'en',
-  },
+  serverExternalPackages: ['@hyperdx/node-opentelemetry'],
 };
 
-export default config;
+export default withMDX(config);

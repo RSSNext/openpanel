@@ -1,10 +1,16 @@
 import { anyPass, assocPath, isEmpty, isNil, reject } from 'ramda';
-import superjson from 'superjson';
 
 export function toDots(
   obj: Record<string, unknown>,
   path = '',
 ): Record<string, string> {
+  // Clickhouse breaks on insert if a property contains invalid surrogate pairs
+  function removeInvalidSurrogates(value: string): string {
+    const validSurrogatePairRegex =
+      /[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\uD800-\uDFFF]/g;
+    return value.match(validSurrogatePairRegex)?.join('') || '';
+  }
+
   return Object.entries(obj).reduce((acc, [key, value]) => {
     if (typeof value === 'object' && value !== null) {
       return {
@@ -17,10 +23,14 @@ export function toDots(
       return acc;
     }
 
+    const cleanedValue =
+      typeof value === 'string'
+        ? removeInvalidSurrogates(value).trim()
+        : String(value);
+
     return {
       ...acc,
-      [`${path}${key}`]:
-        typeof value === 'string' ? value.trim() : String(value),
+      [`${path}${key}`]: cleanedValue,
     };
   }, {});
 }
@@ -36,26 +46,6 @@ export function toObject(
 }
 
 export const strip = reject(anyPass([isEmpty, isNil]));
-
-export function getSafeJson<T>(str: string): T | null {
-  try {
-    return JSON.parse(str);
-  } catch (e) {
-    return null;
-  }
-}
-
-export function getSuperJson<T>(str: string): T | null {
-  const json = getSafeJson<T>(str);
-  if (typeof json === 'object' && json !== null && 'json' in json) {
-    return superjson.parse<T>(str);
-  }
-  return json;
-}
-
-export function setSuperJson(str: Record<string, unknown>): string {
-  return superjson.stringify(str);
-}
 
 type AnyObject = Record<string, any>;
 

@@ -1,11 +1,12 @@
 import { FullPageEmptyState } from '@/components/full-page-empty-state';
 
 import {
-  getCurrentOrganizations,
-  getCurrentProjects,
   getDashboardsByProjectId,
+  getOrganizations,
+  getProjects,
 } from '@openpanel/db';
 
+import { auth } from '@openpanel/auth/nextjs';
 import LayoutContent from './layout-content';
 import { LayoutSidebar } from './layout-sidebar';
 import SideEffects from './side-effects';
@@ -20,15 +21,18 @@ interface AppLayoutProps {
 
 export default async function AppLayout({
   children,
-  params: { organizationSlug, projectId },
+  params: { organizationSlug: organizationId, projectId },
 }: AppLayoutProps) {
+  const { userId } = await auth();
   const [organizations, projects, dashboards] = await Promise.all([
-    getCurrentOrganizations(),
-    getCurrentProjects(organizationSlug),
+    getOrganizations(userId),
+    getProjects({ organizationId, userId }),
     getDashboardsByProjectId(projectId),
   ]);
 
-  if (!organizations.find((item) => item.id === organizationSlug)) {
+  const organization = organizations.find((item) => item.id === organizationId);
+
+  if (!organization) {
     return (
       <FullPageEmptyState title="Not found" className="min-h-screen">
         The organization you were looking for could not be found.
@@ -48,7 +52,7 @@ export default async function AppLayout({
     <div id="dashboard">
       <LayoutSidebar
         {...{
-          organizationSlug,
+          organizationId,
           projectId,
           organizations,
           projects,
@@ -56,7 +60,7 @@ export default async function AppLayout({
         }}
       />
       <LayoutContent>{children}</LayoutContent>
-      <SideEffects />
+      <SideEffects organization={organization} />
     </div>
   );
 }

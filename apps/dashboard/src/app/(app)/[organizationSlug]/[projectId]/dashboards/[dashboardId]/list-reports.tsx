@@ -32,7 +32,8 @@ import {
 } from '@openpanel/constants';
 import type { IServiceDashboard, getReportsByDashboardId } from '@openpanel/db';
 
-import { OverviewReportRange } from '../../overview-sticky-header';
+import { OverviewInterval } from '@/components/overview/overview-interval';
+import { OverviewRange } from '@/components/overview/overview-range';
 
 interface ListReportsProps {
   reports: Awaited<ReturnType<typeof getReportsByDashboardId>>;
@@ -42,7 +43,7 @@ interface ListReportsProps {
 export function ListReports({ reports, dashboard }: ListReportsProps) {
   const router = useRouter();
   const params = useAppParams<{ dashboardId: string }>();
-  const { range, startDate, endDate } = useOverviewOptions();
+  const { range, startDate, endDate, interval } = useOverviewOptions();
   const deletion = api.report.delete.useMutation({
     onError: handleError,
     onSuccess() {
@@ -55,12 +56,13 @@ export function ListReports({ reports, dashboard }: ListReportsProps) {
       <div className="row mb-4 items-center justify-between">
         <h1 className="text-3xl font-semibold">{dashboard.name}</h1>
         <div className="flex items-center justify-end gap-2">
-          <OverviewReportRange />
+          <OverviewRange />
+          <OverviewInterval />
           <Button
             icon={PlusIcon}
             onClick={() => {
               router.push(
-                `/${params.organizationSlug}/${
+                `/${params.organizationId}/${
                   params.projectId
                 }/reports?${new URLSearchParams({
                   dashboardId: params.dashboardId,
@@ -79,7 +81,7 @@ export function ListReports({ reports, dashboard }: ListReportsProps) {
           return (
             <div className="card" key={report.id}>
               <Link
-                href={`/${params.organizationSlug}/${params.projectId}/reports/${report.id}`}
+                href={`/${params.organizationId}/${params.projectId}/reports/${report.id}`}
                 className="flex items-center justify-between border-b border-border p-4 leading-none [&_svg]:hover:opacity-100"
                 shallow
               >
@@ -146,11 +148,7 @@ export function ListReports({ reports, dashboard }: ListReportsProps) {
                     range: range ?? report.range,
                     startDate: startDate ?? report.startDate,
                     endDate: endDate ?? report.endDate,
-                    interval:
-                      getDefaultIntervalByDates(startDate, endDate) ||
-                      (range
-                        ? getDefaultIntervalByRange(range)
-                        : report.interval),
+                    interval: interval ?? report.interval,
                   }}
                 />
               </div>
@@ -163,7 +161,7 @@ export function ListReports({ reports, dashboard }: ListReportsProps) {
             <Button
               onClick={() =>
                 router.push(
-                  `/${params.organizationSlug}/${
+                  `/${params.organizationId}/${
                     params.projectId
                   }/reports?${new URLSearchParams({
                     dashboardId: params.dashboardId,

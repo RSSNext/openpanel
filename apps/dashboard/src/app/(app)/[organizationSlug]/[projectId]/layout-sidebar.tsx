@@ -11,18 +11,19 @@ import { useEffect, useState } from 'react';
 import type {
   IServiceDashboards,
   IServiceOrganization,
-  getProjectsByOrganizationSlug,
+  getProjectsByOrganizationId,
 } from '@openpanel/db';
 
+import { useAppParams } from '@/hooks/useAppParams';
+import Link from 'next/link';
 import LayoutMenu from './layout-menu';
 import LayoutProjectSelector from './layout-project-selector';
 
 interface LayoutSidebarProps {
   organizations: IServiceOrganization[];
   dashboards: IServiceDashboards;
-  organizationSlug: string;
   projectId: string;
-  projects: Awaited<ReturnType<typeof getProjectsByOrganizationSlug>>;
+  projects: Awaited<ReturnType<typeof getProjectsByOrganizationId>>;
 }
 export function LayoutSidebar({
   organizations,
@@ -31,6 +32,8 @@ export function LayoutSidebar({
 }: LayoutSidebarProps) {
   const [active, setActive] = useState(false);
   const pathname = usePathname();
+  const { organizationId } = useAppParams();
+  const organization = organizations.find((o) => o.id === organizationId)!;
 
   useEffect(() => {
     setActive(false);
@@ -42,7 +45,7 @@ export function LayoutSidebar({
         type="button"
         onClick={() => setActive(false)}
         className={cn(
-          'fixed bottom-0 left-0 right-0 top-0 z-50 backdrop-blur-sm transition-opacity',
+          'fixed bottom-0 left-0 right-0 top-0 z-40 backdrop-blur-sm transition-opacity',
           active
             ? 'pointer-events-auto opacity-100'
             : 'pointer-events-none opacity-0',
@@ -50,7 +53,7 @@ export function LayoutSidebar({
       />
       <div
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-border bg-card transition-transform',
+          'fixed left-0 top-0 z-40 flex h-screen w-72 flex-col border-r border-border bg-card transition-transform',
           '-translate-x-72 lg:-translate-x-0', // responsive
           active && 'translate-x-0', // force active on mobile
         )}
@@ -65,7 +68,9 @@ export function LayoutSidebar({
           </Button>
         </div>
         <div className="flex h-16 shrink-0 items-center gap-4 border-b border-border px-4">
-          <LogoSquare className="max-h-8" />
+          <Link href="/">
+            <LogoSquare className="max-h-8" />
+          </Link>
           <LayoutProjectSelector
             align="start"
             projects={projects}
@@ -74,7 +79,7 @@ export function LayoutSidebar({
           <SettingsToggle />
         </div>
         <div className="flex flex-grow flex-col gap-2 overflow-auto p-4">
-          <LayoutMenu dashboards={dashboards} />
+          <LayoutMenu dashboards={dashboards} organization={organization} />
         </div>
         <div className="fixed bottom-0 left-0 right-0">
           <div className="h-8 w-full bg-gradient-to-t from-card to-card/0" />

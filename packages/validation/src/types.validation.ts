@@ -3,7 +3,9 @@ import type { z } from 'zod';
 import type {
   zChartBreakdown,
   zChartEvent,
+  zChartEventSegment,
   zChartInput,
+  zChartInputAI,
   zChartType,
   zCriteria,
   zLineType,
@@ -14,6 +16,7 @@ import type {
 } from './index';
 
 export type IChartInput = z.infer<typeof zChartInput>;
+export type IChartInputAi = z.infer<typeof zChartInputAI>;
 export type IChartProps = z.infer<typeof zReportInput> & {
   name: string;
   lineType: IChartLineType;
@@ -21,6 +24,7 @@ export type IChartProps = z.infer<typeof zReportInput> & {
   previousIndicatorInverted?: boolean;
 };
 export type IChartEvent = z.infer<typeof zChartEvent>;
+export type IChartEventSegment = z.infer<typeof zChartEventSegment>;
 export type IChartEventFilter = IChartEvent['filters'][number];
 export type IChartEventFilterValue =
   IChartEvent['filters'][number]['value'][number];
@@ -84,3 +88,16 @@ export type FinalChart = {
   series: IChartSerie[];
   metrics: Metrics;
 };
+
+export type ISetCookie = (
+  key: string,
+  value: string,
+  options: {
+    maxAge?: number;
+    domain?: string;
+    path?: string;
+    sameSite?: 'lax' | 'strict' | 'none';
+    secure?: boolean;
+    httpOnly?: boolean;
+  },
+) => void;

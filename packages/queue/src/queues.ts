@@ -22,14 +22,18 @@ export interface EventsQueuePayloadIncomingEvent {
     headers: Record<string, string | undefined>;
     currentDeviceId: string;
     previousDeviceId: string;
-    priority: boolean;
   };
 }
 export interface EventsQueuePayloadCreateEvent {
   type: 'createEvent';
   payload: Omit<IServiceEvent, 'id'>;
 }
-type SessionEndRequired = 'sessionId' | 'deviceId' | 'profileId' | 'projectId';
+type SessionEndRequired =
+  | 'sessionId'
+  | 'deviceId'
+  | 'profileId'
+  | 'projectId'
+  | 'createdAt';
 export interface EventsQueuePayloadCreateSessionEnd {
   type: 'createSessionEnd';
   payload: Partial<Omit<IServiceEvent, SessionEndRequired>> &
@@ -56,15 +60,34 @@ export type CronQueuePayloadFlushProfiles = {
   type: 'flushProfiles';
   payload: undefined;
 };
+export type CronQueuePayloadFlushSessions = {
+  type: 'flushSessions';
+  payload: undefined;
+};
 export type CronQueuePayloadPing = {
   type: 'ping';
+  payload: undefined;
+};
+export type CronQueuePayloadProject = {
+  type: 'deleteProjects';
   payload: undefined;
 };
 export type CronQueuePayload =
   | CronQueuePayloadSalt
   | CronQueuePayloadFlushEvents
+  | CronQueuePayloadFlushSessions
   | CronQueuePayloadFlushProfiles
-  | CronQueuePayloadPing;
+  | CronQueuePayloadPing
+  | CronQueuePayloadProject;
+
+export type MiscQueuePayloadTrialEndingSoon = {
+  type: 'trialEndingSoon';
+  payload: {
+    organizationId: string;
+  };
+};
+
+export type MiscQueuePayload = MiscQueuePayloadTrialEndingSoon;
 
 export type CronQueueType = CronQueuePayload['type'];
 
@@ -97,6 +120,13 @@ export const cronQueue = new Queue<CronQueuePayload>('cron', {
   },
 });
 
+export const miscQueue = new Queue<MiscQueuePayload>('misc', {
+  connection: getRedisQueue(),
+  defaultJobOptions: {
+    removeOnComplete: 10,
+  },
+});
+
 export type NotificationQueuePayload = {
   type: 'sendNotification';
   payload: {
@@ -113,3 +143,18 @@ export const notificationQueue = new Queue<NotificationQueuePayload>(
     },
   },
 );
+
+export function addTrialEndingSoonJob(organizationId: string, delay: number) {
+  return miscQueue.add(
+    'misc',
+    {
+      type: 'trialEndingSoon',
+      payload: {
+        organizationId,
+      },
+    },
+    {
+      delay,
+    },
+  );
+}

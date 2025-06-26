@@ -18,7 +18,7 @@ import { ModalContent, ModalHeader } from './Modal/Container';
 
 type SaveReportProps = {
   report: IChartProps;
-  reportId?: string;
+  disableRedirect?: boolean;
 };
 
 const validator = z.object({
@@ -28,24 +28,39 @@ const validator = z.object({
 
 type IForm = z.infer<typeof validator>;
 
-export default function SaveReport({ report }: SaveReportProps) {
+export default function SaveReport({
+  report,
+  disableRedirect,
+}: SaveReportProps) {
   const router = useRouter();
-  const { organizationSlug, projectId } = useAppParams();
+  const { organizationId, projectId } = useAppParams();
   const searchParams = useSearchParams();
   const dashboardId = searchParams?.get('dashboardId') ?? undefined;
 
   const save = api.report.create.useMutation({
     onError: handleError,
     onSuccess(res) {
-      toast('Success', {
-        description: 'Report saved.',
+      const goToReport = () => {
+        router.push(
+          `/${organizationId}/${projectId}/reports/${
+            res.id
+          }?${searchParams?.toString()}`,
+        );
+      };
+
+      toast('Report created', {
+        description: `${res.name}`,
+        action: {
+          label: 'View report',
+          onClick: () => goToReport(),
+        },
       });
+
+      if (!disableRedirect) {
+        goToReport();
+      }
+
       popModal();
-      router.push(
-        `/${organizationSlug}/${projectId}/reports/${
-          res.id
-        }?${searchParams?.toString()}`,
-      );
     },
   });
 

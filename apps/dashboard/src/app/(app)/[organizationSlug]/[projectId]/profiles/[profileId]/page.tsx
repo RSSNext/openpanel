@@ -1,11 +1,10 @@
 import ClickToCopy from '@/components/click-to-copy';
-import { ListPropertiesIcon } from '@/components/events/list-properties-icon';
 import { ProfileAvatar } from '@/components/profiles/profile-avatar';
 import { Padding } from '@/components/ui/padding';
 import { getProfileName } from '@/utils/getters';
 import { notFound } from 'next/navigation';
 
-import { getProfileByIdCached } from '@openpanel/db';
+import { getProfileById, getProfileByIdCached } from '@openpanel/db';
 
 import MostEventsServer from './most-events';
 import PopularRoutesServer from './popular-routes';
@@ -16,7 +15,6 @@ import ProfileMetrics from './profile-metrics';
 
 interface PageProps {
   params: {
-    organizationSlug: string;
     projectId: string;
     profileId: string;
   };
@@ -32,7 +30,10 @@ interface PageProps {
 export default async function Page({
   params: { projectId, profileId },
 }: PageProps) {
-  const profile = await getProfileByIdCached(profileId, projectId);
+  const profile = await getProfileById(
+    decodeURIComponent(profileId),
+    projectId,
+  );
 
   if (!profile) {
     return notFound();

@@ -1,4 +1,6 @@
-import Script from 'next/script';
+// adding .js next/script import fixes an issues
+// with esm and nextjs (when using pages dir)
+import Script from 'next/script.js';
 import React from 'react';
 
 import type {
@@ -69,6 +71,7 @@ export function OpenPanelComponent({
     <>
       <Script src={cdnUrl ?? CDN_URL} async defer />
       <Script
+        strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
           __html: `window.op = window.op || function(...args) {(window.op.q = window.op.q || []).push(args)};
           ${methods

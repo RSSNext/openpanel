@@ -1,166 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { WebhookEvent } from '@clerk/fastify';
-import { AccessLevel, db } from '@openpanel/db';
+import { db, getOrganizationByProjectIdCached } from '@openpanel/db';
 import {
   createSlackInstaller,
   sendSlackNotification,
 
 } from '@openpanel/integrations/src/slack';
-import { getRedisPub } from '@openpanel/redis';
+import {
+  PolarWebhookVerificationError,
+  getProduct,
+  validatePolarEvent,
+} from '@openpanel/payments';
+import { publishEvent } from '@openpanel/redis';
 import { zSlackAuthResponse } from '@openpanel/validation';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { pathOr } from 'ramda';
-import { Webhook } from 'svix';
 import { z } from 'zod';
-
-if (!process.env.CLERK_SIGNING_SECRET) {
-  throw new Error('CLERK_SIGNING_SECRET is required');
-}
-
-const wh = new Webhook(process.env.CLERK_SIGNING_SECRET);
-
-function verify(body: any, headers: FastifyRequest['headers']) {
-  try {
-    const svix_id = headers['svix-id'] as string;
-    const svix_timestamp = headers['svix-timestamp'] as string;
-    const svix_signature = headers['svix-signature'] as string;
-
-    wh.verify(JSON.stringify(body), {
-      'svix-id': svix_id,
-      'svix-timestamp': svix_timestamp,
-      'svix-signature': svix_signature,
-    });
-
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-export async function clerkWebhook(
-  request: FastifyRequest<{
-    Body: WebhookEvent;
-  }>,
-  reply: FastifyReply,
-) {
-  const payload = request.body;
-  const verified = verify(payload, request.headers);
-
-  if (!verified) {
-    return reply.send({ message: 'Invalid signature' });
-  }
-
-  if (payload.type === 'user.created') {
-    const email = payload.data.email_addresses[0]?.email_address;
-    const emails = payload.data.email_addresses.map((e) => e.email_address);
-
-    if (!email) {
-      return Response.json(
-        { message: 'No email address found' },
-        { status: 400 },
-      );
-    }
-
-    const user = await db.user.create({
-      data: {
-        id: payload.data.id,
-        email,
-        firstName: payload.data.first_name,
-        lastName: payload.data.last_name,
-      },
-    });
-
-    const memberships = await db.member.findMany({
-      where: {
-        email: {
-          in: emails,
-        },
-        userId: null,
-      },
-    });
-
-    for (const membership of memberships) {
-      const access = pathOr<string[]>([], ['meta', 'access'], membership);
-      await db.$transaction([
-        // Update the member to link it to the user
-        // This will remove the item from invitations
-        db.member.update({
-          where: {
-            id: membership.id,
-          },
-          data: {
-            userId: user.id,
-          },
-        }),
-        db.projectAccess.createMany({
-          data: access
-            .filter((a) => typeof a === 'string')
-            .map((projectId) => ({
-              organizationSlug: membership.organizationId,
-              organizationId: membership.organizationId,
-              projectId: projectId,
-              userId: user.id,
-              level: AccessLevel.read,
-            })),
-        }),
-      ]);
-    }
-  }
-
-  if (payload.type === 'organizationMembership.created') {
-    const access = payload.data.public_metadata.access;
-    if (Array.isArray(access)) {
-      await db.projectAccess.createMany({
-        data: access
-          .filter((a): a is string => typeof a === 'string')
-          .map((projectId) => ({
-            organizationSlug: payload.data.organization.slug,
-            organizationId: payload.data.organization.slug,
-            projectId: projectId,
-            userId: payload.data.public_user_data.user_id,
-            level: AccessLevel.read,
-          })),
-      });
-    }
-  }
-
-  if (payload.type === 'user.deleted') {
-    await db.$transaction([
-      db.user.update({
-        where: {
-          id: payload.data.id,
-        },
-        data: {
-          deletedAt: new Date(),
-          firstName: null,
-          lastName: null,
-        },
-      }),
-      db.projectAccess.deleteMany({
-        where: {
-          userId: payload.data.id,
-        },
-      }),
-      db.member.deleteMany({
-        where: {
-          userId: payload.data.id,
-        },
-      }),
-    ]);
-  }
-
-  if (payload.type === 'organizationMembership.deleted') {
-    await db.projectAccess.deleteMany({
-      where: {
-        organizationSlug: payload.data.organization.slug,
-        userId: payload.data.public_user_data.user_id,
-      },
-    });
-  }
-
-  reply.send({ success: true });
-}
 
 const paramsSchema = z.object({
   code: z.string(),
@@ -175,7 +29,7 @@ const metadataSchema = z.object({
 
 export async function slackWebhook(
   request: FastifyRequest<{
-    Querystring: WebhookEvent;
+    Querystring: unknown;
   }>,
   reply: FastifyReply,
 ) {
@@ -259,4 +113,134 @@ export async function slackWebhook(
     const html = fs.readFileSync(path.join(__dirname, 'error.html'), 'utf8');
     return reply.status(500).header('Content-Type', 'text/html').send(html);
   }
+}
+
+export async function polarWebhook(
+  request: FastifyRequest<{
+    Querystring: unknown;
+  }>,
+  reply: FastifyReply,
+) {
+  try {
+    const event = validatePolarEvent(
+      request.rawBody!,
+      request.headers as Record<string, string>,
+      process.env.POLAR_WEBHOOK_SECRET ?? '',
+    );
+
+    switch (event.type) {
+      case 'order.created': {
+        const metadata = z
+          .object({
+            organizationId: z.string(),
+          })
+          .parse(event.data.metadata);
+
+        if (event.data.billingReason === 'subscription_cycle') {
+          await db.organization.update({
+            where: {
+              id: metadata.organizationId,
+            },
+            data: {
+              subscriptionPeriodEventsCount: 0,
+            },
+          });
+        }
+        break;
+      }
+      case 'subscription.updated': {
+        const metadata = z
+          .object({
+            organizationId: z.string(),
+            userId: z.string(),
+          })
+          .parse(event.data.metadata);
+
+        const product = await getProduct(event.data.productId);
+        const eventsLimit = product.metadata?.eventsLimit;
+        const subscriptionPeriodEventsLimit =
+          typeof eventsLimit === 'number' ? eventsLimit : undefined;
+
+        if (!subscriptionPeriodEventsLimit) {
+          request.log.warn('No events limit found for product', { product });
+        }
+
+        // If we get a cancel event and we cant find it we should ignore it
+        // Since we only have one subscription per organization but you can have several in polar
+        // we dont want to override the existing subscription with a canceled one
+        // TODO: might be other events that we should handle like this?!
+        if (event.data.status === 'canceled') {
+          const orgSubscription = await db.organization.findFirst({
+            where: {
+              subscriptionCustomerId: event.data.customer.id,
+              subscriptionId: event.data.id,
+              subscriptionStatus: 'active',
+            },
+          });
+
+          if (!orgSubscription) {
+            return reply.status(202).send('OK');
+          }
+        }
+
+        await db.organization.update({
+          where: {
+            id: metadata.organizationId,
+          },
+          data: {
+            subscriptionId: event.data.id,
+            subscriptionCustomerId: event.data.customer.id,
+            subscriptionPriceId: event.data.priceId,
+            subscriptionProductId: event.data.productId,
+            subscriptionStatus: event.data.status,
+            subscriptionStartsAt: event.data.currentPeriodStart,
+            subscriptionCanceledAt: event.data.canceledAt,
+            subscriptionEndsAt:
+              event.data.status === 'canceled'
+                ? event.data.cancelAtPeriodEnd
+                  ? event.data.currentPeriodEnd
+                  : event.data.canceledAt
+                : event.data.currentPeriodEnd,
+            subscriptionCreatedByUserId: metadata.userId,
+            subscriptionInterval: event.data.recurringInterval,
+            subscriptionPeriodEventsLimit,
+          },
+        });
+
+        const projects = await db.project.findMany({
+          where: {
+            organizationId: metadata.organizationId,
+          },
+        });
+
+        for (const project of projects) {
+          await getOrganizationByProjectIdCached.clear(project.id);
+        }
+
+        await publishEvent('organization', 'subscription_updated', {
+          organizationId: metadata.organizationId,
+        });
+
+        break;
+      }
+    }
+
+    reply.status(202).send('OK');
+  } catch (error) {
+    if (error instanceof PolarWebhookVerificationError) {
+      request.log.error('Polar webhook error', { error });
+      reply.status(403).send('');
+    }
+
+    throw error;
+  }
+}
+
+function isToday(date: Date) {
+  const today = new Date();
+  return (
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  );
 }

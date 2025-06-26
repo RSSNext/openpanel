@@ -32,8 +32,41 @@ export function createLogger({ name }: { name: string }): ILogger {
     return info;
   });
 
+  const sensitiveKeys = [
+    'password',
+    'token',
+    'secret',
+    'authorization',
+    'apiKey',
+  ];
+
+  const redactSensitiveInfo = winston.format((info) => {
+    const redactObject = (obj: any): any => {
+      if (!obj || typeof obj !== 'object') return obj;
+
+      return Object.keys(obj).reduce((acc, key) => {
+        const lowerKey = key.toLowerCase();
+        if (sensitiveKeys.some((k) => lowerKey.includes(k))) {
+          acc[key] = '[REDACTED]';
+        } else if (typeof obj[key] === 'object') {
+          if (obj[key] instanceof Date) {
+            acc[key] = obj[key].toISOString();
+          } else {
+            acc[key] = redactObject(obj[key]);
+          }
+        } else {
+          acc[key] = obj[key];
+        }
+        return acc;
+      }, {} as any);
+    };
+
+    return Object.assign({}, info, redactObject(info));
+  });
+
   const format = winston.format.combine(
     errorFormatter(),
+    redactSensitiveInfo(),
     winston.format.json(),
   );
 
@@ -52,6 +85,7 @@ export function createLogger({ name }: { name: string }): ILogger {
     level: logLevel,
     format,
     transports,
+    silent: process.env.NODE_ENV === 'test',
     // Add ISO levels of logging from PINO
     levels: Object.assign(
       { fatal: 0, warn: 4, trace: 7 },

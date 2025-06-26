@@ -14,6 +14,7 @@ type Props = {
   className?: string;
   onChange: (value: string[]) => void;
   renderTag?: (tag: string) => string;
+  id?: string;
 };
 
 const TagInput = ({
@@ -22,6 +23,7 @@ const TagInput = ({
   renderTag,
   placeholder,
   error,
+  id,
 }: Props) => {
   const value = (
     Array.isArray(propValue) ? propValue : propValue ? [propValue] : []
@@ -34,7 +36,7 @@ const TagInput = ({
   const [scope, animate] = useAnimate();
 
   const appendTag = (tag: string) => {
-    onChange([...value, tag]);
+    onChange([...value, tag.trim()]);
   };
 
   const removeTag = (tag: string) => {
@@ -136,11 +138,12 @@ const TagInput = ({
       <input
         ref={inputRef}
         placeholder={`${placeholder} ↵`}
-        className="min-w-20 flex-1 py-1  focus-visible:outline-none"
+        className="min-w-20 flex-1 py-1  focus-visible:outline-none bg-card"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
+        id={id}
       />
     </div>
   );

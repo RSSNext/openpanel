@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server';
+// adding .js next/script import fixes an issues
+// with esm and nextjs (when using pages dir)
+import { NextResponse } from 'next/server.js';
 
-export function createNextRouteHandler({
-  apiUrl = 'https://api.openpanel.dev',
-}: {
+type CreateNextRouteHandlerOptions = {
   apiUrl?: string;
-}) {
+};
+
+export function createNextRouteHandler(options: CreateNextRouteHandlerOptions) {
   return async function POST(req: Request) {
+    const apiUrl = options.apiUrl ?? 'https://api.openpanel.dev';
     const headers = new Headers(req.headers);
     try {
       const res = await fetch(`${apiUrl}/track`, {

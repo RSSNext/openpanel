@@ -1,3 +1,4 @@
+import { TooltipPortal } from '@radix-ui/react-tooltip';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 interface TooltipCompleteProps {
@@ -5,6 +6,7 @@ interface TooltipCompleteProps {
   content: React.ReactNode | string;
   disabled?: boolean;
   side?: 'top' | 'right' | 'bottom' | 'left';
+  delay?: number;
 }
 
 export function TooltipComplete({
@@ -12,15 +14,21 @@ export function TooltipComplete({
   disabled,
   content,
   side,
+  delay,
 }: TooltipCompleteProps) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild={typeof children !== 'string'}>
+    <Tooltip delayDuration={delay}>
+      <TooltipTrigger
+        className="appearance-none"
+        style={{ textAlign: 'inherit' }}
+      >
         {children}
       </TooltipTrigger>
-      <TooltipContent side={side} disabled={disabled}>
-        {content}
-      </TooltipContent>
+      <TooltipPortal>
+        <TooltipContent side={side} disabled={disabled}>
+          {content}
+        </TooltipContent>
+      </TooltipPortal>
     </Tooltip>
   );
 }

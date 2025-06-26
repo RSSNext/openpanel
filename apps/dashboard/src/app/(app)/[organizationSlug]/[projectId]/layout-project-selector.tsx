@@ -14,11 +14,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAppParams } from '@/hooks/useAppParams';
 import { pushModal } from '@/modals';
-import { cn } from '@/utils/cn';
 import {
   Building2Icon,
   CheckIcon,
-  ChevronsUpDown,
   ChevronsUpDownIcon,
   PlusIcon,
 } from 'lucide-react';
@@ -26,14 +24,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import type {
-  getCurrentOrganizations,
-  getProjectsByOrganizationSlug,
+  getOrganizations,
+  getProjectsByOrganizationId,
 } from '@openpanel/db';
 import Link from 'next/link';
 
 interface LayoutProjectSelectorProps {
-  projects: Awaited<ReturnType<typeof getProjectsByOrganizationSlug>>;
-  organizations?: Awaited<ReturnType<typeof getCurrentOrganizations>>;
+  projects: Awaited<ReturnType<typeof getProjectsByOrganizationId>>;
+  organizations?: Awaited<ReturnType<typeof getOrganizations>>;
   align?: 'start' | 'end';
 }
 export default function LayoutProjectSelector({
@@ -42,22 +40,22 @@ export default function LayoutProjectSelector({
   align = 'start',
 }: LayoutProjectSelectorProps) {
   const router = useRouter();
-  const { organizationSlug, projectId } = useAppParams();
+  const { organizationId, projectId } = useAppParams();
   const pathname = usePathname() || '';
   const [open, setOpen] = useState(false);
 
   const changeProject = (newProjectId: string) => {
-    if (organizationSlug && projectId) {
+    if (organizationId && projectId) {
       const split = pathname
         .replace(
-          `/${organizationSlug}/${projectId}`,
-          `/${organizationSlug}/${newProjectId}`,
+          `/${organizationId}/${projectId}`,
+          `/${organizationId}/${newProjectId}`,
         )
         .split('/');
       // slicing here will remove everything after /{orgId}/{projectId}/dashboards [slice here] /xxx/xxx/xxx
       router.push(split.slice(0, 4).join('/'));
     } else {
-      router.push(`/${organizationSlug}/${newProjectId}`);
+      router.push(`/${organizationId}/${newProjectId}`);
     }
   };
 
@@ -79,7 +77,9 @@ export default function LayoutProjectSelector({
           <span className="mx-2 truncate">
             {projectId
               ? projects.find((p) => p.id === projectId)?.name
-              : 'Select project'}
+              : organizationId
+                ? organizations?.find((o) => o.id === organizationId)?.name
+                : 'Select project'}
           </span>
           <ChevronsUpDownIcon className="ml-auto h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -102,7 +102,7 @@ export default function LayoutProjectSelector({
           ))}
           {projects.length > 10 && (
             <DropdownMenuItem asChild>
-              <Link href={`/${organizationSlug}`}>All projects</Link>
+              <Link href={`/${organizationId}`}>All projects</Link>
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
@@ -126,7 +126,7 @@ export default function LayoutProjectSelector({
                   onClick={() => changeOrganization(organization.id)}
                 >
                   {organization.name}
-                  {organization.id === organizationSlug && (
+                  {organization.id === organizationId && (
                     <DropdownMenuShortcut>
                       <CheckIcon size={16} />
                     </DropdownMenuShortcut>

@@ -3,19 +3,32 @@ import { escape } from 'sqlstring';
 import { z } from 'zod';
 
 import {
+  type IServiceProfile,
   TABLE_NAMES,
   chQuery,
   convertClickhouseDateToJs,
   db,
+  eventService,
+  formatClickhouseDate,
+  getConversionEventNames,
   getEventList,
+  getEventMetasCached,
   getEvents,
-  getTopPages,
+  getSettingsForProject,
+  overviewService,
+  sessionService,
 } from '@openpanel/db';
-import { zChartEventFilter } from '@openpanel/validation';
+import {
+  zChartEventFilter,
+  zRange,
+  zTimeInterval,
+} from '@openpanel/validation';
 
+import { clone } from 'ramda';
 import { getProjectAccessCached } from '../access';
 import { TRPCAccessError } from '../errors';
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '../trpc';
+import { getChartStartEndDate } from './chart.helpers';
 
 export const eventRouter = createTRPCRouter({
   updateEventMeta: protectedProcedure
@@ -30,6 +43,7 @@ export const eventRouter = createTRPCRouter({
     )
     .mutation(
       async ({ input: { projectId, name, icon, color, conversion } }) => {
+        await getEventMetasCached.clear(projectId);
         return db.eventMeta.upsert({
           where: {
             name_projectId: {
@@ -48,69 +62,147 @@ export const eventRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         projectId: z.string(),
+        createdAt: z.date().optional(),
       }),
     )
-    .query(async ({ input: { id, projectId } }) => {
-      const res = await getEvents(
-        `SELECT * FROM ${TABLE_NAMES.events} WHERE id = ${escape(id)} AND project_id = ${escape(projectId)};`,
-        {
-          meta: true,
-        },
-      );
+    .query(async ({ input: { id, projectId, createdAt } }) => {
+      const res = await eventService.getById({
+        projectId,
+        id,
+        createdAt,
+      });
 
-      if (!res?.[0]) {
+      if (!res) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Event not found',
         });
       }
 
-      return res[0];
+      return res;
+    }),
+
+  details: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        projectId: z.string(),
+        createdAt: z.date().optional(),
+      }),
+    )
+    .query(async ({ input: { id, projectId, createdAt } }) => {
+      const res = await eventService.getById({
+        projectId,
+        id,
+        createdAt,
+      });
+
+      if (!res) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Event not found',
+        });
+      }
+
+      const session = await sessionService.byId(res?.sessionId, projectId);
+
+      return {
+        event: res,
+        session,
+      };
     }),
 
   events: protectedProcedure
     .input(
       z.object({
         projectId: z.string(),
-        cursor: z.number().optional(),
         profileId: z.string().optional(),
-        take: z.number().default(50),
-        events: z.array(z.string()).optional(),
+        cursor: z.string().optional(),
         filters: z.array(zChartEventFilter).default([]),
         startDate: z.date().optional(),
         endDate: z.date().optional(),
-        meta: z.boolean().optional(),
-        profile: z.boolean().optional(),
+        events: z.array(z.string()).optional(),
       }),
     )
     .query(async ({ input }) => {
-      return getEventList(input);
+      const items = await getEventList({
+        ...input,
+        take: 50,
+        cursor: input.cursor ? new Date(input.cursor) : undefined,
+        select: {
+          properties: true,
+          sessionId: true,
+          deviceId: true,
+          profileId: true,
+        },
+      });
+
+      // Hacky join to get profile for entire session
+      // TODO: Replace this with a join on the session table
+      const map = new Map<string, IServiceProfile>(); // sessionId -> profileId
+      for (const item of items) {
+        if (item.sessionId && item.profile?.isExternal === true) {
+          map.set(item.sessionId, item.profile);
+        }
+      }
+
+      for (const item of items) {
+        const profile = map.get(item.sessionId);
+        if (profile && (item.profile?.isExternal === false || !item.profile)) {
+          item.profile = clone(profile);
+          if (item?.profile?.firstName) {
+            item.profile.firstName = `* ${item.profile.firstName}`;
+          }
+        }
+      }
+
+      const lastItem = items[items.length - 1];
+
+      return {
+        items,
+        meta: {
+          next:
+            items.length === 50 && lastItem
+              ? lastItem.createdAt.toISOString()
+              : null,
+        },
+      };
     }),
   conversions: protectedProcedure
     .input(
       z.object({
         projectId: z.string(),
+        cursor: z.string().optional(),
       }),
     )
-    .query(async ({ input: { projectId } }) => {
-      const conversions = await db.eventMeta.findMany({
-        where: {
-          projectId,
-          conversion: true,
-        },
-      });
+    .query(async ({ input: { projectId, cursor } }) => {
+      const conversions = await getConversionEventNames(projectId);
 
       if (conversions.length === 0) {
-        return [];
+        return {
+          items: [],
+          meta: {
+            next: null,
+          },
+        };
       }
 
-      return getEvents(
-        `SELECT * FROM ${TABLE_NAMES.events} WHERE project_id = ${escape(projectId)} AND name IN (${conversions.map((c) => escape(c.name)).join(', ')}) ORDER BY created_at DESC LIMIT 20;`,
+      const items = await getEvents(
+        `SELECT * FROM ${TABLE_NAMES.events} WHERE ${cursor ? `created_at <= '${formatClickhouseDate(cursor)}' AND` : ''} project_id = ${escape(projectId)} AND name IN (${conversions.map((c) => escape(c.name)).join(', ')}) ORDER BY toDate(created_at) DESC, created_at DESC LIMIT 50;`,
         {
           profile: true,
           meta: true,
         },
       );
+
+      const lastItem = items[items.length - 1];
+
+      return {
+        items,
+        meta: {
+          next: lastItem ? lastItem.createdAt.toISOString() : null,
+        },
+      };
     }),
 
   bots: publicProcedure
@@ -176,10 +268,32 @@ export const eventRouter = createTRPCRouter({
         cursor: z.number().optional(),
         take: z.number().default(20),
         search: z.string().optional(),
+        range: zRange,
+        interval: zTimeInterval,
+        filters: z.array(zChartEventFilter).default([]),
       }),
     )
     .query(async ({ input }) => {
-      return getTopPages(input);
+      const { timezone } = await getSettingsForProject(input.projectId);
+      const { startDate, endDate } = getChartStartEndDate(input, timezone);
+      if (input.search) {
+        input.filters.push({
+          id: 'path',
+          name: 'path',
+          value: [input.search],
+          operator: 'contains',
+        });
+      }
+      return overviewService.getTopPages({
+        projectId: input.projectId,
+        filters: input.filters,
+        startDate,
+        endDate,
+        interval: input.interval,
+        cursor: input.cursor || 1,
+        limit: input.take,
+        timezone,
+      });
     }),
 
   origin: protectedProcedure

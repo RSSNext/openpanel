@@ -10,15 +10,16 @@ export function ProjectLink({
   className?: string;
   title?: string;
 }) {
-  const { organizationSlug, projectId } = useAppParams();
+  const { organizationId, projectId } = useAppParams();
   if (typeof props.href === 'string') {
     return (
       <Link
         {...props}
-        href={`/${organizationSlug}/${projectId}/${props.href.replace(
+        href={`/${organizationId}/${projectId}/${props.href.replace(
           /^\//,
           '',
         )}`}
+        prefetch
       >
         {children}
       </Link>

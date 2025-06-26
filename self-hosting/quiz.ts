@@ -5,6 +5,25 @@ import bcrypt from 'bcrypt';
 import inquirer from 'inquirer';
 import yaml from 'js-yaml';
 
+let envs = {
+  CLICKHOUSE_URL: '',
+  REDIS_URL: '',
+  DATABASE_URL: '',
+  DOMAIN_NAME: '',
+  COOKIE_SECRET: generatePassword(32),
+  RESEND_API_KEY: '',
+  EMAIL_SENDER: '',
+};
+
+type EnvVars = typeof envs;
+
+const addEnvs = (env: Partial<EnvVars>) => {
+  envs = {
+    ...envs,
+    ...env,
+  };
+};
+
 function generatePassword(length: number) {
   const charset =
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -111,20 +130,13 @@ function removeServiceFromDockerCompose(serviceName: string) {
   fs.writeFileSync(dockerComposePath, newYaml);
 }
 
-function writeEnvFile(envs: {
-  CLICKHOUSE_URL: string;
-  REDIS_URL: string;
-  DATABASE_URL: string;
-  DOMAIN_NAME: string;
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: string;
-  CLERK_SECRET_KEY: string;
-  CLERK_SIGNING_SECRET: string;
-}) {
+function writeEnvFile(envs: EnvVars) {
   const envTemplatePath = path.resolve(__dirname, '.env.template');
   const envPath = path.resolve(__dirname, '.env');
   const envTemplate = fs.readFileSync(envTemplatePath, 'utf-8');
 
   const newEnvFile = envTemplate
+    .replace('$COOKIE_SECRET', envs.COOKIE_SECRET)
     .replace('$CLICKHOUSE_URL', envs.CLICKHOUSE_URL)
     .replace('$REDIS_URL', envs.REDIS_URL)
     .replace('$DATABASE_URL', envs.DATABASE_URL)
@@ -134,12 +146,8 @@ function writeEnvFile(envs: {
       '$NEXT_PUBLIC_API_URL',
       `${stripTrailingSlash(envs.DOMAIN_NAME)}/api`,
     )
-    .replace(
-      '$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-      envs.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-    )
-    .replace('$CLERK_SECRET_KEY', envs.CLERK_SECRET_KEY)
-    .replace('$CLERK_SIGNING_SECRET', envs.CLERK_SIGNING_SECRET);
+    .replace('$RESEND_API_KEY', envs.RESEND_API_KEY)
+    .replace('$EMAIL_SENDER', envs.EMAIL_SENDER);
 
   fs.writeFileSync(
     envPath,
@@ -169,11 +177,10 @@ async function initiateOnboarding() {
     'Before you continue, please make sure you have the following:',
     `${T}1. Docker and Docker Compose installed on your machine.`,
     `${T}2. A domain name that you can use for this setup and point it to this machine's ip`,
-    `${T}3. A Clerk.com account`,
-    `${T}${T}- If you don't have one, you can create one at https://clerk.dev`,
-    `${T}${T}- We'll need NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, CLERK_SIGNING_SECRET`,
-    `${T}${T}- Create a webhook pointing to https://your_domain/api/webhook/clerk\n`,
-    'For more information you can read our article on self-hosting at https://docs.openpanel.dev/docs/self-hosting\n',
+    'For more information you can read our article on self-hosting at https://openpanel.dev/docs/self-hosting/self-hosting\n',
+    '',
+    '',
+    'Consider supporting us by becoming a supporter: https://openpanel.dev/supporter (pay what you want and help us keep the lights on)',
   ];
 
   console.log(
@@ -186,10 +193,10 @@ async function initiateOnboarding() {
 
   // Domain name
 
-  const domainNameResponse = await inquirer.prompt([
+  const domain = await inquirer.prompt([
     {
       type: 'input',
-      name: 'domainName',
+      name: 'DOMAIN_NAME',
       message: "What's the domain name you want to use?",
       default: process.env.DEBUG ? 'http://localhost' : undefined,
       prefix: '🌐',
@@ -202,6 +209,8 @@ async function initiateOnboarding() {
       },
     },
   ]);
+
+  addEnvs(domain);
 
   // Dependencies
 
@@ -216,7 +225,6 @@ async function initiateOnboarding() {
     },
   ]);
 
-  let envs: Record<string, string> = {};
   if (!dependenciesResponse.dependencies.includes('Clickhouse')) {
     const clickhouseResponse = await inquirer.prompt([
       {
@@ -228,10 +236,7 @@ async function initiateOnboarding() {
       },
     ]);
 
-    envs = {
-      ...envs,
-      ...clickhouseResponse,
-    };
+    addEnvs(clickhouseResponse);
   }
 
   if (!dependenciesResponse.dependencies.includes('Redis')) {
@@ -243,10 +248,8 @@ async function initiateOnboarding() {
         default: process.env.DEBUG ? 'redis://op-kv:6379' : undefined,
       },
     ]);
-    envs = {
-      ...envs,
-      ...redisResponse,
-    };
+
+    addEnvs(redisResponse);
   }
 
   if (!dependenciesResponse.dependencies.includes('Postgres')) {
@@ -261,10 +264,8 @@ async function initiateOnboarding() {
           : undefined,
       },
     ]);
-    envs = {
-      ...envs,
-      ...dbResponse,
-    };
+
+    addEnvs(dbResponse);
   }
 
   // Proxy
@@ -279,58 +280,15 @@ async function initiateOnboarding() {
     },
   ]);
 
-  // Clerk
-
-  const clerkResponse = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-      message: 'Enter your Clerk Publishable Key:',
-      default: process.env.DEBUG ? 'pk_test_1234567890' : undefined,
-      validate: (value) => {
-        if (value.startsWith('pk_live_') || value.startsWith('pk_test_')) {
-          return true;
-        }
-
-        return 'Please enter a valid Clerk Publishable Key. Should start with "pk_live_" or "pk_test_"';
-      },
-    },
-    {
-      type: 'input',
-      name: 'CLERK_SECRET_KEY',
-      message: 'Enter your Clerk Secret Key:',
-      default: process.env.DEBUG ? 'sk_test_1234567890' : undefined,
-      validate: (value) => {
-        if (value.startsWith('sk_live_') || value.startsWith('sk_test_')) {
-          return true;
-        }
-
-        return 'Please enter a valid Clerk Secret Key. Should start with "sk_live_" or "sk_test_"';
-      },
-    },
-    {
-      type: 'input',
-      name: 'CLERK_SIGNING_SECRET',
-      message: 'Enter your Clerk Signing Secret:',
-      default: process.env.DEBUG ? 'whsec_1234567890' : undefined,
-      validate: (value) => {
-        if (value.startsWith('whsec_')) {
-          return true;
-        }
-
-        return 'Please enter a valid Clerk Signing Secret. Should start with "whsec_"';
-      },
-    },
-  ]);
-
   // OS
 
   const cpus = await inquirer.prompt([
     {
       type: 'input',
       name: 'CPUS',
-      default: os.cpus().length,
-      message: 'How many CPUs do you have?',
+      default: Math.max(Math.floor(os.cpus().length / 2), 1),
+      message:
+        'How many workers do you want to spawn (in many cases 1-2 is enough)?',
       validate: (value) => {
         const parsed = Number.parseInt(value, 10);
 
@@ -346,6 +304,45 @@ async function initiateOnboarding() {
       },
     },
   ]);
+
+  const resend = await inquirer.prompt<{
+    RESEND_API_KEY: string;
+  }>([
+    {
+      type: 'input',
+      name: 'RESEND_API_KEY',
+      message: 'Enter your Resend API key (optional):',
+    },
+  ]);
+
+  if (resend.RESEND_API_KEY) {
+    const emailSender = await inquirer.prompt<{
+      email: string;
+    }>([
+      {
+        type: 'input',
+        name: 'EMAIL_SENDER',
+        default: `no-reply@${envs.DOMAIN_NAME.replace(/https?:\/\//, '')}`,
+        message: 'The email which will be used to send out emails:',
+        validate: (value) => {
+          if (!value) {
+            return 'Field is required';
+          }
+
+          if (!value.includes('@')) {
+            return 'Please enter a valid email';
+          }
+
+          return true;
+        },
+      },
+    ]);
+
+    addEnvs({
+      ...resend,
+      ...emailSender,
+    });
+  }
 
   const basicAuth = await inquirer.prompt<{
     password: string;
@@ -378,11 +375,10 @@ async function initiateOnboarding() {
     DATABASE_URL:
       envs.DATABASE_URL ||
       'postgresql://postgres:postgres@op-db:5432/postgres?schema=public',
-    DOMAIN_NAME: domainNameResponse.domainName,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      clerkResponse.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '',
-    CLERK_SECRET_KEY: clerkResponse.CLERK_SECRET_KEY || '',
-    CLERK_SIGNING_SECRET: clerkResponse.CLERK_SIGNING_SECRET || '',
+    DOMAIN_NAME: envs.DOMAIN_NAME,
+    COOKIE_SECRET: envs.COOKIE_SECRET,
+    RESEND_API_KEY: envs.RESEND_API_KEY || '',
+    EMAIL_SENDER: envs.EMAIL_SENDER || '',
   });
 
   console.log('Updating docker-compose.yml file...\n');
@@ -407,7 +403,7 @@ async function initiateOnboarding() {
   if (proxyResponse.proxy === 'Bring my own') {
     removeServiceFromDockerCompose('op-proxy');
   } else {
-    writeCaddyfile(domainNameResponse.domainName, basicAuth.password);
+    writeCaddyfile(envs.DOMAIN_NAME, basicAuth.password);
   }
 
   searchAndReplaceDockerCompose([['$OP_WORKER_REPLICAS', cpus.CPUS]]);
@@ -417,18 +413,17 @@ async function initiateOnboarding() {
       '======================================================================',
       'Here are some good things to know before you continue:',
       '',
-      `1. Make sure that your webhook is pointing at ${domainNameResponse.domainName}/api/webhook/clerk`,
-      '',
-      '2. Commands:',
+      '1. Commands:',
       '\t- ./start (example: ./start)',
       '\t- ./stop (example: ./stop)',
       '\t- ./logs (example: ./logs)',
       '\t- ./rebuild (example: ./rebuild op-dashboard)',
+      '\t- ./update (example: ./update) pulls the latest docker images and restarts the service',
       '',
-      '3. Danger zone!',
+      '2. Danger zone!',
       '\t- ./danger_wipe_everything (example: ./danger_wipe_everything)',
       '',
-      '4. More about self-hosting: https://docs.openpanel.dev/docs/self-hosting',
+      '3. More about self-hosting: https://openpanel.dev/docs/self-hosting/self-hosting',
       '======================================================================',
       '',
       `Start OpenPanel with "./start" inside the self-hosting directory`,

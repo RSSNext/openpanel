@@ -2,17 +2,21 @@
 
 import { useEventQueryFilters } from '@/hooks/useEventQueryFilters';
 import { cn } from '@/utils/cn';
-import { useState } from 'react';
 
-import type { IChartType } from '@openpanel/validation';
-
-import { ReportChart } from '../report-chart';
+import { pushModal } from '@/modals';
+import { api } from '@/trpc/client';
+import { NOT_SET_VALUE } from '@openpanel/constants';
+import { SerieIcon } from '../report-chart/common/serie-icon';
 import { Widget, WidgetBody } from '../widget';
-import { OverviewChartToggle } from './overview-chart-toggle';
+import { OVERVIEW_COLUMNS_NAME } from './overview-constants';
 import OverviewDetailsButton from './overview-details-button';
 import { WidgetButtons, WidgetFooter, WidgetHead } from './overview-widget';
+import {
+  OverviewWidgetTableGeneric,
+  OverviewWidgetTableLoading,
+} from './overview-widget-table';
 import { useOverviewOptions } from './useOverviewOptions';
-import { useOverviewWidget } from './useOverviewWidget';
+import { useOverviewWidgetV2 } from './useOverviewWidget';
 
 interface OverviewTopSourcesProps {
   projectId: string;
@@ -20,276 +24,51 @@ interface OverviewTopSourcesProps {
 export default function OverviewTopSources({
   projectId,
 }: OverviewTopSourcesProps) {
-  const { interval, range, previous, startDate, endDate } =
-    useOverviewOptions();
-  const [chartType, setChartType] = useState<IChartType>('bar');
+  const { interval, range, startDate, endDate } = useOverviewOptions();
   const [filters, setFilter] = useEventQueryFilters();
-  const isPageFilter = filters.find((filter) => filter.name === 'path');
-  const [widget, setWidget, widgets] = useOverviewWidget('sources', {
-    all: {
+  const [widget, setWidget, widgets] = useOverviewWidgetV2('sources', {
+    referrer_name: {
       title: 'Top sources',
       btn: 'All',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters: filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'referrer_name',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'Top sources',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
-    domain: {
+    referrer: {
       title: 'Top urls',
       btn: 'URLs',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters: filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'referrer',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'Top urls',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
-    type: {
+    referrer_type: {
       title: 'Top types',
       btn: 'Types',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters: filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'referrer_type',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'Top types',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
     utm_source: {
       title: 'UTM Source',
       btn: 'Source',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'properties.__query.utm_source',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'UTM Source',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
     utm_medium: {
       title: 'UTM Medium',
       btn: 'Medium',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'properties.__query.utm_medium',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'UTM Medium',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
     utm_campaign: {
       title: 'UTM Campaign',
       btn: 'Campaign',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'properties.__query.utm_campaign',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'UTM Campaign',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
     utm_term: {
       title: 'UTM Term',
       btn: 'Term',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'properties.__query.utm_term',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'UTM Term',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
     utm_content: {
       title: 'UTM Content',
       btn: 'Content',
-      chart: {
-        report: {
-          limit: 10,
-          projectId,
-          startDate,
-          endDate,
-          events: [
-            {
-              segment: 'event',
-              filters,
-              id: 'A',
-              name: isPageFilter ? 'screen_view' : 'session_start',
-            },
-          ],
-          breakdowns: [
-            {
-              id: 'A',
-              name: 'properties.__query.utm_content',
-            },
-          ],
-          chartType,
-          lineType: 'monotone',
-          interval: interval,
-          name: 'UTM Content',
-          range: range,
-          previous: previous,
-          metric: 'sum',
-        },
-      },
     },
+  });
+
+  const query = api.overview.topGeneric.useQuery({
+    projectId,
+    interval,
+    range,
+    filters,
+    column: widget.key,
+    startDate,
+    endDate,
   });
 
   return (
@@ -311,49 +90,53 @@ export default function OverviewTopSources({
             ))}
           </WidgetButtons>
         </WidgetHead>
-        <WidgetBody>
-          <ReportChart
-            report={{
-              ...widget.chart.report,
-              previous: false,
-            }}
-            options={{
-              onClick: (item) => {
-                switch (widget.key) {
-                  case 'all':
-                    setFilter('referrer_name', item.names[0]);
-                    setWidget('domain');
-                    break;
-                  case 'domain':
-                    setFilter('referrer', item.names[0]);
-                    break;
-                  case 'type':
-                    setFilter('referrer_type', item.names[0]);
-                    setWidget('domain');
-                    break;
-                  case 'utm_source':
-                    setFilter('properties.__query.utm_source', item.names[0]);
-                    break;
-                  case 'utm_medium':
-                    setFilter('properties.__query.utm_medium', item.names[0]);
-                    break;
-                  case 'utm_campaign':
-                    setFilter('properties.__query.utm_campaign', item.names[0]);
-                    break;
-                  case 'utm_term':
-                    setFilter('properties.__query.utm_term', item.names[0]);
-                    break;
-                  case 'utm_content':
-                    setFilter('properties.__query.utm_content', item.names[0]);
-                    break;
-                }
-              },
-            }}
-          />
+        <WidgetBody className="p-0">
+          {query.isLoading ? (
+            <OverviewWidgetTableLoading />
+          ) : (
+            <OverviewWidgetTableGeneric
+              data={query.data ?? []}
+              column={{
+                name: OVERVIEW_COLUMNS_NAME[widget.key],
+                render(item) {
+                  return (
+                    <div className="row items-center gap-2 min-w-0 relative">
+                      <SerieIcon name={item.name || NOT_SET_VALUE} />
+                      <button
+                        type="button"
+                        className="truncate"
+                        onClick={() => {
+                          if (widget.key.startsWith('utm_')) {
+                            setFilter(
+                              `properties.__query.${widget.key}`,
+                              item.name,
+                            );
+                          } else {
+                            setFilter(widget.key, item.name);
+                          }
+                        }}
+                      >
+                        {(item.name || 'Direct / Not set')
+                          .replace(/https?:\/\//, '')
+                          .replace('www.', '')}
+                      </button>
+                    </div>
+                  );
+                },
+              }}
+            />
+          )}
         </WidgetBody>
         <WidgetFooter>
-          <OverviewDetailsButton chart={widget.chart.report} />
-          <OverviewChartToggle {...{ chartType, setChartType }} />
+          <OverviewDetailsButton
+            onClick={() =>
+              pushModal('OverviewTopGenericModal', {
+                projectId,
+                column: widget.key,
+              })
+            }
+          />
+          {/* <OverviewChartToggle {...{ chartType, setChartType }} /> */}
         </WidgetFooter>
       </Widget>
     </>

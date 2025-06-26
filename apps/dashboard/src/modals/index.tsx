@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader } from 'lucide-react';
+import { Loader2Icon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { createPushModal } from 'pushmodal';
 
@@ -9,24 +9,36 @@ import { ModalContent } from './Modal/Container';
 
 const Loading = () => (
   <ModalContent className="flex items-center justify-center p-16">
-    <Loader className="animate-spin" size={40} />
+    <Loader2Icon className="animate-spin" size={40} />
   </ModalContent>
 );
 
 const modals = {
+  OverviewTopPagesModal: dynamic(
+    () => import('../components/overview/overview-top-pages-modal'),
+    {
+      loading: Loading,
+    },
+  ),
+  OverviewTopGenericModal: dynamic(
+    () => import('../components/overview/overview-top-generic-modal'),
+    {
+      loading: Loading,
+    },
+  ),
+  RequestPasswordReset: dynamic(() => import('./request-reset-password'), {
+    loading: Loading,
+  }),
   EditEvent: dynamic(() => import('./edit-event'), {
     loading: Loading,
   }),
   EventDetails: dynamic(() => import('./event-details'), {
     loading: Loading,
   }),
-  EditProject: dynamic(() => import('./EditProject'), {
-    loading: Loading,
-  }),
   EditClient: dynamic(() => import('./EditClient'), {
     loading: Loading,
   }),
-  AddProject: dynamic(() => import('./AddProject'), {
+  AddProject: dynamic(() => import('./add-project'), {
     loading: Loading,
   }),
   AddClient: dynamic(() => import('./AddClient'), {
@@ -59,12 +71,6 @@ const modals = {
   OnboardingTroubleshoot: dynamic(() => import('./OnboardingTroubleshoot'), {
     loading: Loading,
   }),
-  VerifyEmail: dynamic(() => import('./VerifyEmail'), {
-    loading: Loading,
-  }),
-  FunnelStepDetails: dynamic(() => import('./FunnelStepDetails'), {
-    loading: Loading,
-  }),
   DateRangerPicker: dynamic(() => import('./DateRangerPicker'), {
     loading: Loading,
   }),
@@ -81,6 +87,7 @@ const modals = {
 export const {
   pushModal,
   popModal,
+  replaceWithModal,
   popAllModals,
   ModalProvider,
   useOnPushModal,

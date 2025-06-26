@@ -1,3 +1,5 @@
+.secrets
+
 # Based on https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore
 packages/sdk/profileId.txt
 packages/sdk/test.ts
@@ -5,6 +7,8 @@ dump.sql
 dump-*
 .sql
 tmp
+docker/data*
+*.mmdb
 
 # Logs
 

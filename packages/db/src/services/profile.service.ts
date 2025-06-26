@@ -11,7 +11,7 @@ import {
   ch,
   chQuery,
   formatClickhouseDate,
-} from '../clickhouse-client';
+} from '../clickhouse/client';
 import { createSqlBuilder } from '../sql-builder';
 
 export type IProfileMetrics = {
@@ -49,7 +49,17 @@ export async function getProfileById(id: string, projectId: string) {
   }
 
   const [profile] = await chQuery<IClickhouseProfile>(
-    `SELECT * FROM ${TABLE_NAMES.profiles} WHERE id = ${escape(String(id))} AND project_id = ${escape(projectId)} ORDER BY created_at DESC LIMIT 1`,
+    `SELECT 
+      id, 
+      project_id,
+      last_value(nullIf(first_name, '')) as first_name, 
+      last_value(nullIf(last_name, '')) as last_name, 
+      last_value(nullIf(email, '')) as email, 
+      last_value(nullIf(avatar, '')) as avatar, 
+      last_value(is_external) as is_external, 
+      last_value(properties) as properties, 
+      last_value(created_at) as created_at
+    FROM ${TABLE_NAMES.profiles} FINAL WHERE id = ${escape(String(id))} AND project_id = ${escape(projectId)} GROUP BY id, project_id ORDER BY created_at DESC LIMIT 1`,
   );
 
   if (!profile) {
@@ -59,7 +69,7 @@ export async function getProfileById(id: string, projectId: string) {
   return transformProfile(profile);
 }
 
-export const getProfileByIdCached = cacheable(getProfileById, 60 * 30);
+export const getProfileByIdCached = getProfileById; //cacheable(getProfileById, 60 * 30);
 
 interface GetProfileListOptions {
   projectId: string;
@@ -77,11 +87,21 @@ export async function getProfiles(ids: string[], projectId: string) {
   }
 
   const data = await chQuery<IClickhouseProfile>(
-    `SELECT id, first_name, last_name, email, avatar, is_external, properties, created_at
-    FROM ${TABLE_NAMES.profiles} FINAL 
+    `SELECT 
+      id, 
+      project_id,
+      any(nullIf(first_name, '')) as first_name, 
+      any(nullIf(last_name, '')) as last_name, 
+      any(nullIf(email, '')) as email, 
+      any(nullIf(avatar, '')) as avatar, 
+      last_value(is_external) as is_external, 
+      any(properties) as properties, 
+      any(created_at) as created_at
+    FROM ${TABLE_NAMES.profiles}
     WHERE 
       project_id = ${escape(projectId)} AND
       id IN (${filteredIds.map((id) => escape(id)).join(',')})
+    GROUP BY id, project_id
     `,
   );
 
@@ -188,77 +208,31 @@ export function transformProfile({
   };
 }
 
-export async function createProfileAlias({
-  projectId,
-  alias,
-  profileId,
-}: {
-  projectId: string;
-  alias: string;
-  profileId: string;
-}) {
-  await getProfileIdCached.clear({ profileId, projectId });
-  await ch.insert({
-    table: TABLE_NAMES.alias,
-    format: 'JSONEachRow',
-    values: [
-      {
-        projectId,
-        profile_id: profileId,
-        alias,
-        created_at: new Date(),
-      },
-    ],
-  });
-}
-
-export async function upsertProfile({
-  id,
-  firstName,
-  lastName,
-  email,
-  avatar,
-  properties,
-  projectId,
-  isExternal,
-}: IServiceUpsertProfile) {
-  return profileBuffer.add({
+export async function upsertProfile(
+  {
     id,
-    first_name: firstName!,
-    last_name: lastName!,
-    email: email!,
-    avatar: avatar!,
-    properties: properties as Record<string, string | undefined>,
-    project_id: projectId,
-    created_at: formatClickhouseDate(new Date()),
-    is_external: isExternal,
-  });
-}
-
-export async function getProfileId({
-  profileId,
-  projectId,
-}: {
-  profileId: number | string | undefined;
-  projectId: string;
-}) {
-  if (!profileId) {
-    return '';
-  }
-
-  const res = await chQuery<{
-    alias: string;
-    profile_id: string;
-    project_id: string;
-  }>(
-    `SELECT * FROM ${TABLE_NAMES.alias} WHERE project_id = '${projectId}' AND (alias = '${profileId}' OR profile_id = '${profileId}')`,
+    firstName,
+    lastName,
+    email,
+    avatar,
+    properties,
+    projectId,
+    isExternal,
+  }: IServiceUpsertProfile,
+  isFromEvent = false,
+) {
+  return profileBuffer.add(
+    {
+      id,
+      first_name: firstName!,
+      last_name: lastName!,
+      email: email!,
+      avatar: avatar!,
+      properties: properties as Record<string, string | undefined>,
+      project_id: projectId,
+      created_at: formatClickhouseDate(new Date()),
+      is_external: isExternal,
+    },
+    isFromEvent,
   );
-
-  if (res[0]) {
-    return res[0].profile_id;
-  }
-
-  return String(profileId);
 }
-
-export const getProfileIdCached = cacheable(getProfileId, 60 * 30);

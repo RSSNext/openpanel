@@ -4,9 +4,11 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import icoToPng from 'ico-to-png';
 import sharp from 'sharp';
 
+import { getClientIp } from '@/utils/get-client-ip';
 import { createHash } from '@openpanel/common/server';
-import { TABLE_NAMES, ch, formatClickhouseDate } from '@openpanel/db';
-import { getRedisCache } from '@openpanel/redis';
+import { TABLE_NAMES, ch, chQuery, formatClickhouseDate } from '@openpanel/db';
+import { getGeoLocation } from '@openpanel/geo';
+import { cacheable, getCache, getRedisCache } from '@openpanel/redis';
 
 interface GetFaviconParams {
   url: string;
@@ -57,6 +59,8 @@ export async function getFavicon(
     if (cacheKey) {
       getRedisCache().set(`favicon:${cacheKey}`, buffer.toString('base64'));
     }
+    reply.header('Cache-Control', 'public, max-age=604800');
+    reply.header('Expires', new Date(Date.now() + 604800000).toUTCString());
     reply.type('image/png');
     return reply.send(buffer);
   }
@@ -149,4 +153,31 @@ export async function ping(
       error: 'Failed to insert ping',
     });
   }
+}
+
+export async function stats(request: FastifyRequest, reply: FastifyReply) {
+  const res = await getCache('api:stats', 60 * 60, async () => {
+    const projects = await chQuery<{ project_id: string; count: number }>(
+      `SELECT project_id, count(*) as count from ${TABLE_NAMES.events} GROUP by project_id order by count()`,
+    );
+    const last24h = await chQuery<{ count: number }>(
+      `SELECT count(*) as count from ${TABLE_NAMES.events} WHERE created_at > now() - interval '24 hours'`,
+    );
+    return { projects, last24hCount: last24h[0]?.count || 0 };
+  });
+
+  reply.status(200).send({
+    projectsCount: res.projects.length,
+    eventsCount: res.projects.reduce((acc, { count }) => acc + count, 0),
+    eventsLast24hCount: res.last24hCount,
+  });
+}
+
+export async function getGeo(request: FastifyRequest, reply: FastifyReply) {
+  const ip = getClientIp(request);
+  if (!ip) {
+    return reply.status(400).send('Bad Request');
+  }
+  const geo = await getGeoLocation(ip);
+  return reply.status(200).send(geo);
 }

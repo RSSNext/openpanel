@@ -1,0 +1,57 @@
+---
+title: Changelog for self-hosting
+description: This is a list of changes that have been made to the self-hosting setup.
+---
+
+## 1.2.0 
+
+We have renamed `SELF_HOSTED` to `NEXT_PUBLIC_SELF_HOSTED`. It's important to rename this env before your upgrade to this version.
+
+## 1.1.1
+
+Packed with new features since our first stable release.
+
+## 1.0.0 (stable)
+
+OpenPanel self-hosting is now in a stable state and should not be any breaking changes in the future.
+
+If you are upgrading from a previous version, you should keep an eye on the logs since it well tell you if you need to take any actions. Its not mandatory but its recommended since it might bite you in the *ss later.
+
+### New environment variables.
+
+<Callout>
+If you upgrading from a previous version, you'll need to edit your `.env` file if you want to use these new variables.
+</Callout>
+
+- `ALLOW_REGISTRATION` - If set to `false` new users will not be able to register (only the first user can register).
+- `ALLOW_INVITATION` - If set to `false` new users will not be able to be invited.
+- `RESEND_API_KEY` - If set, we'll use Resend to send e-mails.
+- `EMAIL_SENDER` - The e-mail address that will be used to send e-mails.
+
+### Removed Clickhouse Keeper
+
+In 0.0.6 we introduced a cluster mode for Clickhouse. This was a misstake and we have removed it. 
+
+Remove op-zk from services and volumes
+
+```
+services:
+  op-zk:
+    image: clickhouse/clickhouse-server:24.3.2-alpine
+    volumes:
+      - op-zk-data:/var/lib/clickhouse
+      - ./clickhouse/clickhouse-keeper-config.xml:/etc/clickhouse-server/config.xml
+    command: [ 'clickhouse-keeper', '--config-file', '/etc/clickhouse-server/config.xml' ]
+    restart: always
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+volumes:
+  op-zk-data:
+    driver: local
+```
+
+## 0.0.6
+
+Removed Clerk.com and added self-hosted authentication.

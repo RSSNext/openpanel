@@ -1,5 +1,6 @@
-import { getCurrentOrganizations, getProjectWithClients } from '@openpanel/db';
+import { getOrganizations, getProjectWithClients } from '@openpanel/db';
 
+import { auth } from '@openpanel/auth/nextjs';
 import OnboardingConnect from './onboarding-connect';
 
 type Props = {
@@ -9,9 +10,10 @@ type Props = {
 };
 
 const Connect = async ({ params: { projectId } }: Props) => {
-  const orgs = await getCurrentOrganizations();
-  const organizationSlug = orgs[0]?.id;
-  if (!organizationSlug) {
+  const { userId } = await auth();
+  const orgs = await getOrganizations(userId);
+  const organizationId = orgs[0]?.id;
+  if (!organizationId) {
     throw new Error('No organization found');
   }
   const project = await getProjectWithClients(projectId);

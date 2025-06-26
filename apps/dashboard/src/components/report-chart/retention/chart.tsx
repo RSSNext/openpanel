@@ -15,7 +15,6 @@ import {
 } from 'recharts';
 
 import { average, round } from '@openpanel/common';
-import { fix } from 'mathjs';
 import { useXAxisProps, useYAxisProps } from '../common/axis';
 import { useReportChartContext } from '../context';
 import { RetentionTooltip } from './tooltip';
@@ -33,16 +32,16 @@ export function Chart({ data }: Props) {
 
   const xAxisProps = useXAxisProps({ interval, hide: hideXAxis });
   const yAxisProps = useYAxisProps({
-    data: [100],
     hide: hideYAxis,
     tickFormatter: (value) => `${value}%`,
   });
   const averageRow = data[0];
-  const averageRetentionRate = average(averageRow?.percentages || [], true);
-  const rechartData = averageRow?.percentages.map((item, index, list) => ({
+  const averageRetentionRate =
+    average(averageRow?.percentages || [], true) * 100;
+  const rechartData = averageRow?.percentages.map((item, index) => ({
     days: index,
-    percentage: item,
-    value: averageRow.values[index],
+    percentage: item * 100,
+    value: averageRow.values?.[index],
     sum: averageRow.sum,
   }));
 

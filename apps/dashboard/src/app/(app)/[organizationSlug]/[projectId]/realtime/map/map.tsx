@@ -49,23 +49,12 @@ const Map = ({ markers }: Props) => {
   const boundingBox = getBoundingBox(hull);
   const [zoom] = useAnimatedState(
     markers.length === 1
-      ? 20
+      ? 1
       : determineZoom(boundingBox, size ? size?.height / size?.width : 1),
   );
 
   const [long] = useAnimatedState(center.long);
   const [lat] = useAnimatedState(center.lat);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      if (ref.current) {
-        setSize({
-          width: ref.current.clientWidth,
-          height: ref.current.clientHeight,
-        });
-      }
-    });
-  }, [isFullscreen]);
 
   useEffect(() => {
     return bind(window, {
@@ -81,6 +70,15 @@ const Map = ({ markers }: Props) => {
     });
   }, []);
 
+  useEffect(() => {
+    if (ref.current) {
+      setSize({
+        width: ref.current.clientWidth,
+        height: ref.current.clientHeight,
+      });
+    }
+  }, []);
+
   const adjustSizeBasedOnZoom = (size: number) => {
     const minMultiplier = 1;
     const maxMultiplier = 7;
@@ -93,23 +91,14 @@ const Map = ({ markers }: Props) => {
   };
 
   const theme = useTheme();
-  console.log(theme.theme);
 
   return (
-    <div
-      className={cn(
-        'fixed bottom-0 left-0 right-0 top-0',
-        !isFullscreen && 'lg:left-72',
-      )}
-      ref={ref}
-    >
+    <div className={cn('absolute bottom-0 left-0 right-0 top-0')} ref={ref}>
       {size === null ? (
         <></>
       ) : (
         <>
           <ComposableMap
-            width={size?.width}
-            height={size?.height}
             projection="geoMercator"
             projectionConfig={{
               rotate: [0, 0, 0],
@@ -123,8 +112,10 @@ const Map = ({ markers }: Props) => {
                     <Geography
                       key={geo.rsmKey}
                       geography={geo}
-                      fill={theme.theme === 'dark' ? '#000' : '#e5eef6'}
-                      stroke={theme.theme === 'dark' ? '#333' : '#bcccda'}
+                      fill={theme.resolvedTheme === 'dark' ? '#000' : '#e5eef6'}
+                      stroke={
+                        theme.resolvedTheme === 'dark' ? '#333' : '#bcccda'
+                      }
                       pointerEvents={'none'}
                     />
                   ))
@@ -153,7 +144,9 @@ const Map = ({ markers }: Props) => {
                     <Marker coordinates={coordinates}>
                       <circle
                         r={size}
-                        fill={theme.theme === 'dark' ? '#3d79ff' : '#2266ec'}
+                        fill={
+                          theme.resolvedTheme === 'dark' ? '#3d79ff' : '#2266ec'
+                        }
                         className="animate-ping opacity-20"
                       />
                     </Marker>
@@ -161,7 +154,11 @@ const Map = ({ markers }: Props) => {
                       <Marker coordinates={coordinates}>
                         <circle
                           r={size}
-                          fill={theme.theme === 'dark' ? '#3d79ff' : '#2266ec'}
+                          fill={
+                            theme.resolvedTheme === 'dark'
+                              ? '#3d79ff'
+                              : '#2266ec'
+                          }
                           fillOpacity={0.5}
                         />
                       </Marker>

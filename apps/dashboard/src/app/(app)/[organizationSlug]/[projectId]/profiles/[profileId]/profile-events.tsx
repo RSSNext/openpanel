@@ -2,17 +2,12 @@
 
 import { TableButtons } from '@/components/data-table';
 import { EventsTable } from '@/components/events/table';
+import { EventsTableColumns } from '@/components/events/table/events-table-columns';
 import { OverviewFiltersButtons } from '@/components/overview/filters/overview-filters-buttons';
 import { OverviewFiltersDrawer } from '@/components/overview/filters/overview-filters-drawer';
-import {
-  useEventQueryFilters,
-  useEventQueryNamesFilter,
-} from '@/hooks/useEventQueryFilters';
+import { useEventQueryFilters } from '@/hooks/useEventQueryFilters';
 import { api } from '@/trpc/client';
 import { Loader2Icon } from 'lucide-react';
-import { parseAsInteger, useQueryState } from 'nuqs';
-
-import { GetEventListOptions } from '@openpanel/db';
 
 type Props = {
   projectId: string;
@@ -21,21 +16,14 @@ type Props = {
 
 const Events = ({ projectId, profileId }: Props) => {
   const [filters] = useEventQueryFilters();
-  const [eventNames] = useEventQueryNamesFilter();
-  const [cursor, setCursor] = useQueryState(
-    'cursor',
-    parseAsInteger.withDefault(0),
-  );
-  const query = api.event.events.useQuery(
+  const query = api.event.events.useInfiniteQuery(
     {
-      cursor,
       projectId,
-      take: 50,
-      events: eventNames,
       filters,
       profileId,
     },
     {
+      getNextPageParam: (lastPage) => lastPage.meta.next,
       keepPreviousData: true,
     },
   );
@@ -49,6 +37,7 @@ const Events = ({ projectId, profileId }: Props) => {
           enableEventsFilter
         />
         <OverviewFiltersButtons className="justify-end p-0" />
+        <EventsTableColumns />
         {query.isRefetching && (
           <div className="center-center size-8 rounded border bg-background">
             <Loader2Icon
@@ -58,7 +47,7 @@ const Events = ({ projectId, profileId }: Props) => {
           </div>
         )}
       </TableButtons>
-      <EventsTable query={query} cursor={cursor} setCursor={setCursor} />
+      <EventsTable query={query} />
     </div>
   );
 };

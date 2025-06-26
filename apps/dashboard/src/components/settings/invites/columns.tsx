@@ -15,12 +15,16 @@ import { pathOr } from 'ramda';
 import { toast } from 'sonner';
 
 import { ACTIONS } from '@/components/data-table';
+import { clipboard } from '@/utils/clipboard';
 import type { IServiceInvite, IServiceProject } from '@openpanel/db';
 
 export function useColumns(
   projects: IServiceProject[],
 ): ColumnDef<IServiceInvite>[] {
   return [
+    {
+      accessorKey: 'id',
+    },
     {
       accessorKey: 'email',
       header: 'Mail',
@@ -44,10 +48,10 @@ export function useColumns(
       ),
     },
     {
-      accessorKey: 'access',
+      accessorKey: 'projectAccess',
       header: 'Access',
       cell: ({ row }) => {
-        const access = pathOr<string[]>([], ['meta', 'access'], row.original);
+        const access = row.original.projectAccess;
         return (
           <>
             {access.map((id) => {
@@ -100,9 +104,18 @@ function ActionCell({ row }: { row: Row<IServiceInvite> }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuItem
+          onClick={() => {
+            clipboard(
+              `${window.location.origin}/onboarding?inviteId=${row.original.id}`,
+            );
+          }}
+        >
+          Copy invite link
+        </DropdownMenuItem>
+        <DropdownMenuItem
           className="text-destructive"
           onClick={() => {
-            revoke.mutate({ memberId: row.original.id });
+            revoke.mutate({ inviteId: row.original.id });
           }}
         >
           Revoke invite

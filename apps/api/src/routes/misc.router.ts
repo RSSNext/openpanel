@@ -1,11 +1,17 @@
 import * as controller from '@/controllers/misc.controller';
 import type { FastifyPluginCallback } from 'fastify';
 
-const miscRouter: FastifyPluginCallback = (fastify, opts, done) => {
+const miscRouter: FastifyPluginCallback = async (fastify) => {
   fastify.route({
     method: 'POST',
     url: '/ping',
     handler: controller.ping,
+  });
+
+  fastify.route({
+    method: 'GET',
+    url: '/stats',
+    handler: controller.stats,
   });
 
   fastify.route({
@@ -20,7 +26,11 @@ const miscRouter: FastifyPluginCallback = (fastify, opts, done) => {
     handler: controller.clearFavicons,
   });
 
-  done();
+  fastify.route({
+    method: 'GET',
+    url: '/geo',
+    handler: controller.getGeo,
+  });
 };
 
 export default miscRouter;

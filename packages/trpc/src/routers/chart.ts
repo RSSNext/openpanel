@@ -3,11 +3,19 @@ import { escape } from 'sqlstring';
 import { z } from 'zod';
 
 import {
+  type IClickhouseProfile,
+  type IServiceProfile,
   TABLE_NAMES,
+  ch,
   chQuery,
+  clix,
+  conversionService,
   createSqlBuilder,
   db,
+  funnelService,
+  getEventMetasCached,
   getSelectPropertyKey,
+  getSettingsForProject,
   toDate,
 } from '@openpanel/db';
 import {
@@ -26,13 +34,16 @@ import {
 } from 'date-fns';
 import { getProjectAccessCached } from '../access';
 import { TRPCAccessError } from '../errors';
-import { createTRPCRouter, protectedProcedure, publicProcedure } from '../trpc';
+import {
+  cacheMiddleware,
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from '../trpc';
 import {
   getChart,
   getChartPrevStartEndDate,
   getChartStartEndDate,
-  getFunnelData,
-  getFunnelStep,
 } from './chart.helpers';
 
 function utc(date: string | Date) {
@@ -42,6 +53,8 @@ function utc(date: string | Date) {
   return formatISO(date).replace('T', ' ').slice(0, 19);
 }
 
+const cacher = cacheMiddleware(60);
+
 export const chartRouter = createTRPCRouter({
   events: protectedProcedure
     .input(
@@ -50,15 +63,24 @@ export const chartRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input: { projectId } }) => {
-      const events = await chQuery<{ name: string }>(
-        `SELECT DISTINCT name FROM ${TABLE_NAMES.event_names_mv} WHERE project_id = ${escape(projectId)}`,
-      );
+      const [events, meta] = await Promise.all([
+        chQuery<{ name: string; count: number }>(
+          `SELECT name, count(name) as count FROM ${TABLE_NAMES.event_names_mv} WHERE project_id = ${escape(projectId)} GROUP BY name ORDER BY count DESC, name ASC`,
+        ),
+        getEventMetasCached(projectId),
+      ]);
 
       return [
         {
           name: '*',
+          count: events.reduce((acc, event) => acc + event.count, 0),
+          meta: undefined,
         },
-        ...events,
+        ...events.map((event) => ({
+          name: event.name,
+          count: event.count,
+          meta: meta.find((m) => m.name === event.name),
+        })),
       ];
     }),
 
@@ -70,16 +92,39 @@ export const chartRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input: { projectId, event } }) => {
-      const res = await chQuery<{ property_key: string; created_at: string }>(
-        `SELECT 
-          distinct property_key, 
-          max(created_at) as created_at 
-        FROM ${TABLE_NAMES.event_property_values_mv} 
-        WHERE project_id = ${escape(projectId)}
-        ${event && event !== '*' ? `AND name = ${escape(event)}` : ''}
-        GROUP BY property_key 
-        ORDER BY created_at DESC`,
-      );
+      const profiles = await clix(ch, 'UTC')
+        .select<Pick<IServiceProfile, 'properties'>>(['properties'])
+        .from(TABLE_NAMES.profiles)
+        .where('project_id', '=', projectId)
+        .where('is_external', '=', true)
+        .orderBy('created_at', 'DESC')
+        .limit(10000)
+        .execute();
+
+      const profileProperties: string[] = [];
+      for (const p of profiles) {
+        for (const property of Object.keys(p.properties)) {
+          if (!profileProperties.includes(`profile.properties.${property}`)) {
+            profileProperties.push(`profile.properties.${property}`);
+          }
+        }
+      }
+
+      const query = clix(ch)
+        .select<{ property_key: string; created_at: string }>([
+          'distinct property_key',
+          'max(created_at) as created_at',
+        ])
+        .from(TABLE_NAMES.event_property_values_mv)
+        .where('project_id', '=', projectId)
+        .groupBy(['property_key'])
+        .orderBy('created_at', 'DESC');
+
+      if (event && event !== '*') {
+        query.where('name', '=', event);
+      }
+
+      const res = await query.execute();
 
       const properties = res
         .map((item) => item.property_key)
@@ -87,9 +132,12 @@ export const chartRouter = createTRPCRouter({
         .map((item) => item.replace(/\.([0-9]+)/g, '[*]'))
         .map((item) => `properties.${item}`);
 
+      if (event === '*' || !event) {
+        properties.push('name');
+      }
+
       properties.push(
         'has_profile',
-        'name',
         'path',
         'origin',
         'referrer',
@@ -106,6 +154,11 @@ export const chartRouter = createTRPCRouter({
         'device',
         'brand',
         'model',
+        'profile.id',
+        'profile.first_name',
+        'profile.last_name',
+        'profile.email',
+        ...profileProperties,
       );
 
       return pipe(
@@ -132,33 +185,51 @@ export const chartRouter = createTRPCRouter({
       const values: string[] = [];
 
       if (property.startsWith('properties.')) {
-        const propertyKey = property.replace(/^properties\./, '');
+        const query = clix(ch)
+          .select<{
+            property_value: string;
+            created_at: string;
+          }>(['distinct property_value', 'max(created_at) as created_at'])
+          .from(TABLE_NAMES.event_property_values_mv)
+          .where('project_id', '=', projectId)
+          .where('property_key', '=', property.replace(/^properties\./, ''))
+          .groupBy(['property_value'])
+          .orderBy('created_at', 'DESC');
 
-        const res = await chQuery<{
-          property_value: string;
-          created_at: string;
-        }>(
-          `SELECT 
-            distinct property_value, 
-            max(created_at) as created_at 
-          FROM ${TABLE_NAMES.event_property_values_mv}
-          WHERE project_id = ${escape(projectId)}
-          AND property_key = ${escape(propertyKey)}
-          ${event && event !== '*' ? `AND name = ${escape(event)}` : ''}
-          GROUP BY property_value 
-          ORDER BY created_at DESC`,
-        );
+        if (event && event !== '*') {
+          query.where('name', '=', event);
+        }
+
+        const res = await query.execute();
 
         values.push(...res.map((e) => e.property_value));
       } else {
-        const { sb, getSql } = createSqlBuilder();
-        sb.where.project_id = `project_id = ${escape(projectId)}`;
+        const query = clix(ch)
+          .select<{ values: string[] }>([
+            `distinct ${getSelectPropertyKey(property)} as values`,
+          ])
+          .from(TABLE_NAMES.events)
+          .where('project_id', '=', projectId)
+          .where('created_at', '>', clix.exp('now() - INTERVAL 6 MONTH'))
+          .orderBy('created_at', 'DESC')
+          .limit(100_000);
+
         if (event !== '*') {
-          sb.where.event = `name = ${escape(event)}`;
+          query.where('name', '=', event);
         }
-        sb.select.values = `distinct ${getSelectPropertyKey(property)} as values`;
-        sb.where.date = `${toDate('created_at', 'month')} > now() - INTERVAL 6 MONTH`;
-        const events = await chQuery<{ values: string[] }>(getSql());
+
+        if (property.startsWith('profile.')) {
+          query.leftAnyJoin(
+            clix(ch)
+              .select<IClickhouseProfile>([])
+              .from(TABLE_NAMES.profiles)
+              .where('project_id', '=', projectId),
+            'profile.id = profile_id',
+            'profile',
+          );
+        }
+
+        const events = await query.execute();
 
         values.push(
           ...pipe(
@@ -176,15 +247,15 @@ export const chartRouter = createTRPCRouter({
     }),
 
   funnel: protectedProcedure.input(zChartInput).query(async ({ input }) => {
-    const currentPeriod = getChartStartEndDate(input);
-    const previousPeriod = getChartPrevStartEndDate({
-      range: input.range,
-      ...currentPeriod,
-    });
+    const { timezone } = await getSettingsForProject(input.projectId);
+    const currentPeriod = getChartStartEndDate(input, timezone);
+    const previousPeriod = getChartPrevStartEndDate(currentPeriod);
 
     const [current, previous] = await Promise.all([
-      getFunnelData({ ...input, ...currentPeriod }),
-      getFunnelData({ ...input, ...previousPeriod }),
+      funnelService.getFunnel({ ...input, ...currentPeriod }),
+      input.previous
+        ? funnelService.getFunnel({ ...input, ...previousPeriod })
+        : Promise.resolve(null),
     ]);
 
     return {
@@ -193,24 +264,51 @@ export const chartRouter = createTRPCRouter({
     };
   }),
 
-  funnelStep: protectedProcedure
-    .input(
-      zChartInput.extend({
-        step: z.number(),
-      }),
-    )
-    .query(async ({ input }) => {
-      const currentPeriod = getChartStartEndDate(input);
-      return getFunnelStep({ ...input, ...currentPeriod });
-    }),
+  conversion: protectedProcedure.input(zChartInput).query(async ({ input }) => {
+    const { timezone } = await getSettingsForProject(input.projectId);
+    const currentPeriod = getChartStartEndDate(input, timezone);
+    const previousPeriod = getChartPrevStartEndDate(currentPeriod);
 
-  chart: publicProcedure.input(zChartInput).query(async ({ input, ctx }) => {
-    if (ctx.session.userId) {
-      const access = await getProjectAccessCached({
-        projectId: input.projectId,
-        userId: ctx.session.userId,
-      });
-      if (!access) {
+    const [current, previous] = await Promise.all([
+      conversionService.getConversion({ ...input, ...currentPeriod }),
+      input.previous
+        ? conversionService.getConversion({ ...input, ...previousPeriod })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      current: current.map((serie, sIndex) => ({
+        ...serie,
+        data: serie.data.map((d, dIndex) => ({
+          ...d,
+          previousRate: previous?.[sIndex]?.data?.[dIndex]?.rate,
+        })),
+      })),
+      previous,
+    };
+  }),
+
+  chart: publicProcedure
+    // .use(cacher)
+    .input(zChartInput)
+    .query(async ({ input, ctx }) => {
+      if (ctx.session.userId) {
+        const access = await getProjectAccessCached({
+          projectId: input.projectId,
+          userId: ctx.session.userId,
+        });
+        if (!access) {
+          const share = await db.shareOverview.findFirst({
+            where: {
+              projectId: input.projectId,
+            },
+          });
+
+          if (!share) {
+            throw TRPCAccessError('You do not have access to this project');
+          }
+        }
+      } else {
         const share = await db.shareOverview.findFirst({
           where: {
             projectId: input.projectId,
@@ -221,20 +319,9 @@ export const chartRouter = createTRPCRouter({
           throw TRPCAccessError('You do not have access to this project');
         }
       }
-    } else {
-      const share = await db.shareOverview.findFirst({
-        where: {
-          projectId: input.projectId,
-        },
-      });
 
-      if (!share) {
-        throw TRPCAccessError('You do not have access to this project');
-      }
-    }
-
-    return getChart(input);
-  }),
+      return getChart(input);
+    }),
   cohort: protectedProcedure
     .input(
       z.object({
@@ -249,8 +336,9 @@ export const chartRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input }) => {
+      const { timezone } = await getSettingsForProject(input.projectId);
       const { projectId, firstEvent, secondEvent } = input;
-      const dates = getChartStartEndDate(input);
+      const dates = getChartStartEndDate(input, timezone);
       const diffInterval = {
         minute: () => differenceInDays(dates.endDate, dates.startDate),
         hour: () => differenceInDays(dates.endDate, dates.startDate),
@@ -297,32 +385,6 @@ export const chartRouter = createTRPCRouter({
         return `name IN (${event.map((e) => escape(e)).join(',')})`;
       };
 
-      // const dropoffsSelect = range(1, diffInterval + 1)
-      //   .map(
-      //     (index) =>
-      //       `arrayFilter(x -> NOT has(interval_${index}_users, x), interval_${index - 1}_users) AS interval_${index}_dropoffs`,
-      //   )
-      //   .join(',\n');
-
-      // const dropoffCountsSelect = range(1, diffInterval + 1)
-      //   .map(
-      //     (index) =>
-      //       `length(interval_${index}_dropoffs) AS interval_${index}_dropoff_count`,
-      //   )
-      //   .join(',\n');
-
-      // SELECT
-      //     project_id,
-      //     profile_id AS userID,
-      //     name,
-      //     toDate(created_at) AS cohort_interval
-      // FROM events_v2
-      // WHERE profile_id != device_id
-      //   AND ${whereEventNameIs(firstEvent)}
-      //       AND project_id = ${escape(projectId)}
-      //       AND created_at BETWEEN toDate('${utc(dates.startDate)}') AND toDate('${utc(dates.endDate)}')
-      // GROUP BY project_id, name, cohort_interval, userID
-
       const cohortQuery = `
         WITH 
         cohort_users AS (
@@ -335,15 +397,27 @@ export const chartRouter = createTRPCRouter({
             AND project_id = ${escape(projectId)}
             AND created_at BETWEEN toDate('${utc(dates.startDate)}') AND toDate('${utc(dates.endDate)}')
         ),
-        retention_matrix AS (
+        last_event AS
+        (
+            SELECT
+                profile_id,
+                project_id,
+                toDate(created_at) AS event_date
+            FROM cohort_events_mv
+            WHERE ${whereEventNameIs(secondEvent)}
+            AND project_id = ${escape(projectId)}
+            AND created_at BETWEEN toDate('${utc(dates.startDate)}') AND toDate('${utc(dates.endDate)}') + INTERVAL ${diffInterval} ${sqlInterval}
+        ),
+        retention_matrix AS
+        (
           SELECT
-            c.cohort_interval,
-            e.profile_id,
-            dateDiff('${sqlInterval}', c.cohort_interval, ${sqlToStartOf}(e.created_at)) AS x_after_cohort
-          FROM cohort_users AS c
-          INNER JOIN ${TABLE_NAMES.cohort_events_mv} AS e ON c.userID = e.profile_id
-          WHERE (${whereEventNameIs(secondEvent)}) AND (e.project_id = ${escape(projectId)}) 
-          AND ((e.created_at >= c.cohort_interval) AND (e.created_at <= (c.cohort_interval + INTERVAL ${diffInterval} ${sqlInterval})))
+              f.cohort_interval,
+              l.profile_id,
+              dateDiff('${sqlInterval}', f.cohort_interval, ${sqlToStartOf}(l.event_date)) AS x_after_cohort
+          FROM cohort_users AS f
+          INNER JOIN last_event AS l ON f.userID = l.profile_id
+          WHERE (l.event_date >= f.cohort_interval) 
+          AND (l.event_date <= (f.cohort_interval + INTERVAL ${diffInterval} ${sqlInterval}))
         ),
         interval_users AS (
           SELECT
@@ -400,9 +474,7 @@ function processCohortData(
       cohort_interval: row.cohort_interval,
       sum,
       values: values,
-      percentages: values.map((value) =>
-        sum > 0 ? round((value / sum) * 100, 2) : 0,
-      ),
+      percentages: values.map((value) => (sum > 0 ? round(value / sum, 2) : 0)),
     };
   });
 

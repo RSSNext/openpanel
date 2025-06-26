@@ -3,11 +3,12 @@ import { escape } from 'sqlstring';
 
 import {
   TABLE_NAMES,
-  getCurrentOrganizations,
   getEvents,
+  getOrganizations,
   getProjectWithClients,
 } from '@openpanel/db';
 
+import { auth } from '@openpanel/auth/nextjs';
 import OnboardingVerify from './onboarding-verify';
 
 type Props = {
@@ -17,15 +18,16 @@ type Props = {
 };
 
 const Verify = async ({ params: { projectId } }: Props) => {
-  const orgs = await getCurrentOrganizations();
-  const organizationSlug = orgs[0]?.id;
-  if (!organizationSlug) {
+  const { userId } = await auth();
+  const orgs = await getOrganizations(userId);
+  const organizationId = orgs[0]?.id;
+  if (!organizationId) {
     throw new Error('No organization found');
   }
   const [project, events] = await Promise.all([
     await getProjectWithClients(projectId),
     getEvents(
-      `SELECT * FROM ${TABLE_NAMES.events} WHERE project_id = ${escape(projectId)} LIMIT 100`,
+      `SELECT * FROM ${TABLE_NAMES.events} WHERE project_id = ${escape(projectId)} ORDER BY created_at DESC LIMIT 100`,
     ),
   ]);
 
@@ -33,7 +35,7 @@ const Verify = async ({ params: { projectId } }: Props) => {
     return <div>Hmm, something fishy is going on. Please reload the page.</div>;
   }
 
-  return <OnboardingVerify project={project} events={events} />;
+  return <OnboardingVerify project={project} events={events.reverse()} />;
 };
 
 export default Verify;

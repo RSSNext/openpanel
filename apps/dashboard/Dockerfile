@@ -2,6 +2,9 @@ ARG NODE_VERSION=20.15.1
 
 FROM node:${NODE_VERSION}-slim AS base
 
+# FIX: Bad workaround (https://github.com/nodejs/corepack/issues/612)
+ENV COREPACK_INTEGRITY_KEYS=0
+
 ENV SKIP_ENV_VALIDATION="1"
 
 ARG DATABASE_URL
@@ -17,6 +20,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update && apt-get install -y \
     openssl \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
@@ -31,10 +35,14 @@ COPY pnpm-lock.yaml pnpm-lock.yaml
 COPY pnpm-workspace.yaml pnpm-workspace.yaml
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/json/package.json packages/json/package.json
 COPY packages/redis/package.json packages/redis/package.json
 COPY packages/queue/package.json packages/queue/package.json
 COPY packages/common/package.json packages/common/package.json
+COPY packages/auth/package.json packages/auth/package.json
+COPY packages/email/package.json packages/email/package.json
 COPY packages/constants/package.json packages/constants/package.json
+COPY packages/payments/package.json packages/payments/package.json
 COPY packages/validation/package.json packages/validation/package.json
 COPY packages/integrations/package.json packages/integrations/package.json
 COPY packages/sdks/sdk/package.json packages/sdks/sdk/package.json
@@ -55,12 +63,7 @@ WORKDIR /app/apps/dashboard
 # Will be replaced on runtime
 ENV NEXT_PUBLIC_DASHBOARD_URL="__NEXT_PUBLIC_DASHBOARD_URL__"
 ENV NEXT_PUBLIC_API_URL="__NEXT_PUBLIC_API_URL__"
-ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_eW9sby5jb20k"
-# Does not need to be replaced
-ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL="/login"
-ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL="/register"
-ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/"
-ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/"
+ENV NEXT_PUBLIC_SELF_HOSTED="__NEXT_PUBLIC_SELF_HOSTED__"
 
 RUN pnpm run build
 

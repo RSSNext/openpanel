@@ -15,10 +15,30 @@ datasource db {
   directUrl = env("DATABASE_URL_DIRECT")
 }
 
+model CodeMigration {
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("__code_migrations")
+}
+
 enum ProjectType {
   website
   app
   backend
+}
+
+model Chat {
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  messages  Json
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("chats")
 }
 
 model Organization {
@@ -27,14 +47,37 @@ model Organization {
   projects        Project[]
   members         Member[]
   createdByUserId String?
-  createdBy       User?           @relation(fields: [createdByUserId], references: [id])
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @default(now()) @updatedAt
+  createdBy       User?           @relation(name: "organizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   ProjectAccess   ProjectAccess[]
   Client          Client[]
   Dashboard       Dashboard[]
   ShareOverview   ShareOverview[]
   integrations    Integration[]
+  invites         Invite[]
+  timezone        String?
+
+  // Subscription
+  subscriptionId                          String?
+  subscriptionCustomerId                  String?
+  subscriptionPriceId                     String?
+  subscriptionProductId                   String?
+  /// [IPrismaSubscriptionStatus]
+  subscriptionStatus                      String?
+  subscriptionStartsAt                    DateTime?
+  subscriptionEndsAt                      DateTime?
+  subscriptionCanceledAt                  DateTime?
+  subscriptionCreatedByUserId             String?
+  subscriptionCreatedBy                   User?     @relation(name: "subscriptionCreatedBy", fields: [subscriptionCreatedByUserId], references: [id])
+  subscriptionPeriodEventsCount           Int       @default(0)
+  subscriptionPeriodEventsCountExceededAt DateTime?
+  subscriptionPeriodEventsLimit           Int       @default(0)
+  subscriptionInterval                    String?
+
+  // When deleteAt > now(), the organization will be deleted
+  deleteAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@map("organizations")
 }
@@ -44,15 +87,50 @@ model User {
   email                String          @unique
   firstName            String?
   lastName             String?
-  createdOrganizations Organization[]
+  createdOrganizations Organization[]  @relation("organizationCreatedBy")
+  subscriptions        Organization[]  @relation("subscriptionCreatedBy")
   membership           Member[]
   sentInvites          Member[]        @relation("invitedBy")
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @default(now()) @updatedAt
   deletedAt            DateTime?
   ProjectAccess        ProjectAccess[]
+  sessions             Session[]
+  accounts             Account[]
+  invites              Invite[]
 
   @@map("users")
+}
+
+model Account {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()"))
+  userId                String
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email                 String?
+  provider              String
+  providerId            String?
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @default(now()) @updatedAt
+  resetPasswords        ResetPassword[]
+
+  @@map("accounts")
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  user      User     @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 model Member {
@@ -61,11 +139,11 @@ model Member {
   email          String
   // userId is nullable because we want to allow invites to be sent to emails that are not registered
   userId         String?
-  user           User?        @relation(fields: [userId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   invitedById    String?
-  invitedBy      User?        @relation("invitedBy", fields: [invitedById], references: [id])
+  invitedBy      User?        @relation("invitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   meta           Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @default(now()) @updatedAt
@@ -73,17 +151,35 @@ model Member {
   @@map("members")
 }
 
-model Project {
-  id               String        @id @default(dbgenerated("gen_random_uuid()"))
-  name             String
-  organizationSlug String
-  organization     Organization? @relation(fields: [organizationId], references: [id])
-  organizationId   String?
-  eventsCount      Int           @default(0)
-  types            ProjectType[] @default([])
+model Invite {
+  id             String       @id
+  email          String
+  createdBy      User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdById    String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectAccess  String[]
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now()) @updatedAt
+  role           String
 
-  events     Event[]
-  profiles   Profile[]
+  @@map("invites")
+}
+
+model Project {
+  id             String        @id @default(dbgenerated("gen_random_uuid()"))
+  name           String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  eventsCount    Int           @default(0)
+  types          ProjectType[] @default([])
+  domain         String?
+  cors           String[]      @default([])
+  crossDomain    Boolean       @default(false)
+  /// [IPrismaProjectFilters]
+  filters        Json          @default("[]")
+
   clients    Client[]
   reports    Report[]
   dashboards Dashboard[]
@@ -95,8 +191,12 @@ model Project {
   notificationRules NotificationRule[]
   notifications     Notification[]
 
+  // When deleteAt > now(), the project will be deleted
+  deleteAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+  Chat      Chat[]
 
   @@map("projects")
 }
@@ -108,34 +208,18 @@ enum AccessLevel {
 }
 
 model ProjectAccess {
-  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId        String
-  project          Project       @relation(fields: [projectId], references: [id])
-  organizationSlug String
-  organization     Organization? @relation(fields: [organizationId], references: [id])
-  organizationId   String?
-  userId           String
-  user             User          @relation(fields: [userId], references: [id])
-  level            AccessLevel
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @default(now()) @updatedAt
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level          AccessLevel
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now()) @updatedAt
 
   @@map("project_access")
-}
-
-model Event {
-  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name       String
-  properties Json
-  projectId  String
-  project    Project @relation(fields: [projectId], references: [id])
-
-  profileId String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  @@map("events")
 }
 
 model Salt {
@@ -146,22 +230,6 @@ model Salt {
   @@map("salts")
 }
 
-model Profile {
-  id         String   @id
-  externalId String?
-  firstName  String?
-  lastName   String?
-  email      String?
-  avatar     String?
-  properties Json
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
-
-  @@map("profiles")
-}
-
 enum ClientType {
   read
   write
@@ -169,17 +237,14 @@ enum ClientType {
 }
 
 model Client {
-  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name             String
-  secret           String?
-  type             ClientType    @default(write)
-  projectId        String?
-  project          Project?      @relation(fields: [projectId], references: [id])
-  organizationSlug String
-  organization     Organization? @relation(fields: [organizationId], references: [id])
-  organizationId   String?
-  cors             String?
-  crossDomain      Boolean       @default(false)
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  secret         String?
+  type           ClientType   @default(write)
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -205,17 +270,17 @@ enum ChartType {
   map
   funnel
   retention
+  conversion
 }
 
 model Dashboard {
-  id               String        @id @default(dbgenerated("gen_random_uuid()"))
-  name             String
-  organizationSlug String
-  organization     Organization? @relation(fields: [organizationId], references: [id])
-  organizationId   String?
-  projectId        String
-  project          Project       @relation(fields: [projectId], references: [id])
-  reports          Report[]
+  id             String       @id @default(dbgenerated("gen_random_uuid()"))
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reports        Report[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -243,14 +308,14 @@ model Report {
   unit         String?
   metric       Metric    @default(sum)
   projectId    String
-  project      Project   @relation(fields: [projectId], references: [id])
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   previous     Boolean   @default(false)
   criteria     String?
   funnelGroup  String?
   funnelWindow Float?
 
   dashboardId String
-  dashboard   Dashboard @relation(fields: [dashboardId], references: [id])
+  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -258,27 +323,16 @@ model Report {
   @@map("reports")
 }
 
-model Waitlist {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  accepted  Boolean  @default(false)
-
-  @@map("waitlist")
-}
-
 model ShareOverview {
-  id               String        @unique
-  projectId        String        @unique
-  project          Project       @relation(fields: [projectId], references: [id])
-  organizationSlug String
-  organization     Organization? @relation(fields: [organizationId], references: [id])
-  organizationId   String?
-  public           Boolean       @default(false)
-  password         String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @default(now()) @updatedAt
+  id             String       @unique
+  projectId      String       @unique
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  public         Boolean      @default(false)
+  password       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now()) @updatedAt
 
   @@map("shares")
 }
@@ -290,7 +344,7 @@ model EventMeta {
   color      String?
   icon       String?
   projectId  String
-  project    Project  @relation(fields: [projectId], references: [id])
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -305,7 +359,7 @@ model Reference {
   description String?
   date        DateTime @default(now())
   projectId   String
-  project     Project  @relation(fields: [projectId], references: [id])
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -320,37 +374,40 @@ enum IntegrationType {
 }
 
 model NotificationRule {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         String
-  projectId    String
-  project      Project       @relation(fields: [projectId], references: [id])
-  integrations Integration[]
-  sendToApp    Boolean       @default(false)
-  sendToEmail  Boolean       @default(false)
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  integrations  Integration[]
+  sendToApp     Boolean        @default(false)
+  sendToEmail   Boolean        @default(false)
   /// [IPrismaNotificationRuleConfig]
-  config       Json
-  template     String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @default(now()) @updatedAt
+  config        Json
+  template      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  notifications Notification[]
 
   @@map("notification_rules")
 }
 
 model Notification {
-  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId     String
-  project       Project      @relation(fields: [projectId], references: [id])
-  title         String
-  message       String
-  isReadAt      DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @default(now()) @updatedAt
-  sendToApp     Boolean      @default(false)
-  sendToEmail   Boolean      @default(false)
-  integration   Integration? @relation(fields: [integrationId], references: [id])
-  integrationId String?      @db.Uuid
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId          String
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title              String
+  message            String
+  isReadAt           DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @default(now()) @updatedAt
+  sendToApp          Boolean           @default(false)
+  sendToEmail        Boolean           @default(false)
+  integration        Integration?      @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integrationId      String?           @db.Uuid
+  notificationRuleId String?           @db.Uuid
+  notificationRule   NotificationRule? @relation(fields: [notificationRuleId], references: [id], onDelete: Cascade)
   /// [IPrismaNotificationPayload]
-  payload       Json?
+  payload            Json?
 
   @@map("notifications")
 }
@@ -360,7 +417,7 @@ model Integration {
   name              String
   /// [IPrismaIntegrationConfig]
   config            Json
-  organization      Organization       @relation(fields: [organizationId], references: [id])
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationId    String
   notificationRules NotificationRule[]
   notifications     Notification[]
@@ -368,4 +425,15 @@ model Integration {
   updatedAt         DateTime           @default(now()) @updatedAt
 
   @@map("integrations")
+}
+
+model ResetPassword {
+  id        String   @id
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("reset_password")
 }

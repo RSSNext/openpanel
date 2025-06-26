@@ -11,7 +11,7 @@
     "editor.defaultFormatter": "Prisma.prisma"
   },
   "[typescript]": {
-    "editor.defaultFormatter": "vscode.typescript-language-features"
+    "editor.defaultFormatter": "biomejs.biome"
   },
   "[typescriptreact]": {
     "editor.defaultFormatter": "biomejs.biome"
@@ -21,13 +21,11 @@
   },
   "editor.formatOnSave": true,
   "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
     [
-      "cva\\(([^)]*)\\)",
-      "[\"'`]([^\"'`]*).*?[\"'`]"
-    ],
-    [
-      "cx\\(([^)]*)\\)",
-      "(?:'|\"|`)([^']*)(?:'|\"|`)"
+      "\\b\\w+ClassName\\s*=\\s*[\"'`]([^\"'`]*)[\"'`]",
+      "[\"'`]([^\"'`]*)[\"'`]"
     ]
   ],
   "typescript.enablePromptUseWorkspaceTsdk": true,

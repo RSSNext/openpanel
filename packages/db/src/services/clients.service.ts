@@ -1,3 +1,4 @@
+import { cacheable } from '@openpanel/redis';
 import type { Client, Prisma } from '../prisma-client';
 import { db } from '../prisma-client';
 
@@ -8,10 +9,10 @@ export type IServiceClientWithProject = Prisma.ClientGetPayload<{
   };
 }>;
 
-export async function getClientsByOrganizationSlug(organizationSlug: string) {
+export async function getClientsByOrganizationId(organizationId: string) {
   return db.client.findMany({
     where: {
-      organizationSlug,
+      organizationId,
     },
     include: {
       project: true,
@@ -21,3 +22,16 @@ export async function getClientsByOrganizationSlug(organizationSlug: string) {
     },
   });
 }
+
+export async function getClientById(
+  id: string,
+): Promise<IServiceClientWithProject | null> {
+  return db.client.findUnique({
+    where: { id },
+    include: {
+      project: true,
+    },
+  });
+}
+
+export const getClientByIdCached = cacheable(getClientById, 60 * 60 * 24);

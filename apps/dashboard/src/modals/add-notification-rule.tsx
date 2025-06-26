@@ -15,6 +15,7 @@ import { PureFilterItem } from '@/components/report/sidebar/filters/FilterItem';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { ComboboxAdvanced } from '@/components/ui/combobox-advanced';
+import { ComboboxEvents } from '@/components/ui/combobox-events';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppParams } from '@/hooks/useAppParams';
 import { useEventNames } from '@/hooks/useEventNames';
@@ -164,7 +165,48 @@ export default function AddNotificationRule({ rule }: Props) {
 
         <WithLabel
           label="Template"
-          info="Customize your notification. Exisiting variables: $EVENT_NAME, $RULE_NAME"
+          info={
+            <div className="prose dark:prose-invert">
+              <p>
+                Customize your notification message. You can grab any property
+                from your event.
+              </p>
+
+              <ul>
+                <li>
+                  <code>{'{{name}}'}</code> - The name of the event
+                </li>
+                <li>
+                  <code>{'{{rule_name}}'}</code> - The name of the rule
+                </li>
+                <li>
+                  <code>{'{{properties.your.property}}'}</code> - Get the value
+                  of a custom property
+                </li>
+                <li>
+                  <div className="flex gap-x-2 flex-wrap">
+                    And many more...
+                    <code>profileId</code>
+                    <code>createdAt</code>
+                    <code>country</code>
+                    <code>city</code>
+                    <code>os</code>
+                    <code>osVersion</code>
+                    <code>browser</code>
+                    <code>browserVersion</code>
+                    <code>device</code>
+                    <code>brand</code>
+                    <code>model</code>
+                    <code>path</code>
+                    <code>origin</code>
+                    <code>referrer</code>
+                    <code>referrerName</code>
+                    <code>referrerType</code>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          }
         >
           <Textarea
             {...form.register('template')}
@@ -228,16 +270,13 @@ function EventField({
           control={form.control}
           name={`config.events.${index}.name`}
           render={({ field }) => (
-            <Combobox
+            <ComboboxEvents
               searchable
               className="flex-1"
               value={field.value}
               placeholder="Select event"
               onChange={field.onChange}
-              items={eventNames.map((item) => ({
-                label: item.name,
-                value: item.name,
-              }))}
+              items={eventNames}
             />
           )}
         />

@@ -1,30 +1,42 @@
-import PageLayout from '@/app/(app)/[organizationSlug]/[projectId]/page-layout';
 import { Padding } from '@/components/ui/padding';
 
 import {
-  getClientsByOrganizationSlug,
-  getProjectsByOrganizationSlug,
+  db,
+  getClientsByOrganizationId,
+  getProjectWithClients,
+  getProjectsByOrganizationId,
 } from '@openpanel/db';
 
-import ListProjects from './list-projects';
+import { notFound } from 'next/navigation';
+import DeleteProject from './delete-project';
+import EditProjectDetails from './edit-project-details';
+import EditProjectFilters from './edit-project-filters';
+import ProjectClients from './project-clients';
 
 interface PageProps {
   params: {
-    organizationSlug: string;
+    projectId: string;
   };
 }
 
-export default async function Page({
-  params: { organizationSlug },
-}: PageProps) {
-  const [projects, clients] = await Promise.all([
-    getProjectsByOrganizationSlug(organizationSlug),
-    getClientsByOrganizationSlug(organizationSlug),
-  ]);
+export default async function Page({ params: { projectId } }: PageProps) {
+  const project = await getProjectWithClients(projectId);
+
+  if (!project) {
+    notFound();
+  }
 
   return (
     <Padding>
-      <ListProjects projects={projects} clients={clients} />
+      <div className="col gap-4">
+        <div className="row justify-between items-center">
+          <h1 className="text-2xl font-bold">{project.name}</h1>
+        </div>
+        <EditProjectDetails project={project} />
+        <EditProjectFilters project={project} />
+        <ProjectClients project={project} />
+        <DeleteProject project={project} />
+      </div>
     </Padding>
   );
 }

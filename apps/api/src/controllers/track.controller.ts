@@ -1,20 +1,14 @@
-import type { GeoLocation } from '@/utils/parseIp';
-import { getClientIp, parseIp } from '@/utils/parseIp';
+import { getClientIp } from '@/utils/get-client-ip';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { path, assocPath, pathOr, pick } from 'ramda';
 
+import { checkDuplicatedEvent } from '@/utils/deduplicate';
 import { generateDeviceId, parseUserAgent } from '@openpanel/common/server';
-import {
-  createProfileAlias,
-  getProfileById,
-  getProfileIdCached,
-  getSalts,
-  upsertProfile,
-} from '@openpanel/db';
+import { getProfileById, getSalts, upsertProfile } from '@openpanel/db';
+import { type GeoLocation, getGeoLocation } from '@openpanel/geo';
 import { eventsQueue } from '@openpanel/queue';
-import { getRedisCache } from '@openpanel/redis';
+import { getLock } from '@openpanel/redis';
 import type {
-  AliasPayload,
   DecrementPayload,
   IdentifyPayload,
   IncrementPayload,
@@ -29,6 +23,7 @@ export function getStringHeaders(headers: FastifyRequest['headers']) {
         'openpanel-sdk-name',
         'openpanel-sdk-version',
         'openpanel-client-id',
+        'request-id',
       ],
       headers,
     ),
@@ -49,7 +44,7 @@ function getIdentity(body: TrackHandlerPayload): IdentifyPayload | undefined {
 
   return (
     identity ||
-    (body.payload.profileId
+    (body?.payload?.profileId
       ? {
           profileId: body.payload.profileId,
         }
@@ -100,17 +95,16 @@ export async function handler(
   const projectId = request.client?.projectId;
 
   if (!projectId) {
-    reply.status(400).send('missing origin');
+    reply.status(400).send({
+      status: 400,
+      error: 'Bad Request',
+      message: 'Missing projectId',
+    });
     return;
   }
 
   const identity = getIdentity(request.body);
-  const profileId = identity?.profileId
-    ? await getProfileIdCached({
-        projectId,
-        profileId: identity?.profileId,
-      })
-    : undefined;
+  const profileId = identity?.profileId;
 
   // We might get a profileId from the alias table
   // If we do, we should use that instead of the one from the payload
@@ -120,7 +114,7 @@ export async function handler(
 
   switch (request.body.type) {
     case 'track': {
-      const [salts, geo] = await Promise.all([getSalts(), parseIp(ip)]);
+      const [salts, geo] = await Promise.all([getSalts(), getGeoLocation(ip)]);
       const currentDeviceId = ua
         ? generateDeviceId({
             salt: salts.current,
@@ -137,6 +131,21 @@ export async function handler(
             ua,
           })
         : '';
+
+      if (
+        await checkDuplicatedEvent({
+          reply,
+          payload: {
+            ...request.body,
+            timestamp,
+            previousDeviceId,
+            currentDeviceId,
+          },
+          projectId,
+        })
+      ) {
+        return;
+      }
 
       const promises = [
         track({
@@ -168,7 +177,20 @@ export async function handler(
       break;
     }
     case 'identify': {
-      const geo = await parseIp(ip);
+      if (
+        await checkDuplicatedEvent({
+          reply,
+          payload: {
+            ...request.body,
+            timestamp,
+          },
+          projectId,
+        })
+      ) {
+        return;
+      }
+
+      const geo = await getGeoLocation(ip);
       await identify({
         payload: request.body.payload,
         projectId,
@@ -178,13 +200,27 @@ export async function handler(
       break;
     }
     case 'alias': {
-      await alias({
-        payload: request.body.payload,
-        projectId,
+      reply.status(400).send({
+        status: 400,
+        error: 'Bad Request',
+        message: 'Alias is not supported',
       });
       break;
     }
     case 'increment': {
+      if (
+        await checkDuplicatedEvent({
+          reply,
+          payload: {
+            ...request.body,
+            timestamp,
+          },
+          projectId,
+        })
+      ) {
+        return;
+      }
+
       await increment({
         payload: request.body.payload,
         projectId,
@@ -192,13 +228,36 @@ export async function handler(
       break;
     }
     case 'decrement': {
+      if (
+        await checkDuplicatedEvent({
+          reply,
+          payload: {
+            ...request.body,
+            timestamp,
+          },
+          projectId,
+        })
+      ) {
+        return;
+      }
+
       await decrement({
         payload: request.body.payload,
         projectId,
       });
       break;
     }
+    default: {
+      reply.status(400).send({
+        status: 400,
+        error: 'Bad Request',
+        message: 'Invalid type',
+      });
+      break;
+    }
   }
+
+  reply.status(200).send();
 }
 
 type TrackPayload = {
@@ -225,17 +284,7 @@ async function track({
   timestamp: string;
   isTimestampFromThePast: boolean;
 }) {
-  const isScreenView = payload.name === 'screen_view';
-  // this will ensure that we don't have multiple events creating sessions
-  const locked = await getRedisCache().set(
-    `request:priority:${currentDeviceId}-${previousDeviceId}:${isScreenView ? 'screen_view' : 'other'}`,
-    'locked',
-    'PX',
-    950, // a bit under the delay below
-    'NX',
-  );
-
-  eventsQueue.add(
+  await eventsQueue.add(
     'event',
     {
       type: 'incomingEvent',
@@ -250,14 +299,14 @@ async function track({
         geo,
         currentDeviceId,
         previousDeviceId,
-        priority: locked === 'OK',
       },
     },
     {
-      // Prioritize 'screen_view' events by setting no delay
-      // This ensures that session starts are created from 'screen_view' events
-      // rather than other events, maintaining accurate session tracking
-      delay: payload.name === 'screen_view' ? undefined : 1000,
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 200,
+      },
     },
   );
 }
@@ -273,7 +322,7 @@ async function identify({
   geo: GeoLocation;
   ua?: string;
 }) {
-  const uaInfo = parseUserAgent(ua);
+  const uaInfo = parseUserAgent(ua, payload.properties);
   await upsertProfile({
     ...payload,
     id: payload.profileId,
@@ -284,20 +333,6 @@ async function identify({
       ...(geo ?? {}),
       ...uaInfo,
     },
-  });
-}
-
-async function alias({
-  payload,
-  projectId,
-}: {
-  payload: AliasPayload;
-  projectId: string;
-}) {
-  await createProfileAlias({
-    alias: payload.alias,
-    profileId: payload.profileId,
-    projectId,
   });
 }
 

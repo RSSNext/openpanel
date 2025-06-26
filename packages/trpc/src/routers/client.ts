@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import { z } from 'zod';
 
-import { stripTrailingSlash } from '@openpanel/common';
 import type { Prisma } from '@openpanel/db';
 import { db } from '@openpanel/db';
 
@@ -16,8 +15,6 @@ export const clientRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         name: z.string(),
-        cors: z.string().nullable(),
-        crossDomain: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -36,8 +33,6 @@ export const clientRouter = createTRPCRouter({
         },
         data: {
           name: input.name,
-          cors: input.cors ?? null,
-          crossDomain: input.crossDomain,
         },
       });
     }),
@@ -46,23 +41,18 @@ export const clientRouter = createTRPCRouter({
       z.object({
         name: z.string(),
         projectId: z.string(),
-        organizationSlug: z.string(),
-        cors: z.string().nullable(),
-        crossDomain: z.boolean().optional(),
+        organizationId: z.string(),
         type: z.enum(['read', 'write', 'root']).optional(),
       }),
     )
     .mutation(async ({ input }) => {
       const secret = `sec_${crypto.randomBytes(10).toString('hex')}`;
       const data: Prisma.ClientCreateArgs['data'] = {
-        organizationSlug: input.organizationSlug,
-        organizationId: input.organizationSlug,
+        organizationId: input.organizationId,
         projectId: input.projectId,
         name: input.name,
         type: input.type ?? 'write',
-        cors: input.cors ? stripTrailingSlash(input.cors) : null,
         secret: await hashPassword(secret),
-        crossDomain: input.crossDomain ?? false,
       };
 
       const client = await db.client.create({ data });

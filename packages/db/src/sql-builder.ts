@@ -1,4 +1,4 @@
-import { TABLE_NAMES } from './clickhouse-client';
+import { TABLE_NAMES } from './clickhouse/client';
 
 export interface SqlBuilderObject {
   where: Record<string, string>;
@@ -7,8 +7,10 @@ export interface SqlBuilderObject {
   groupBy: Record<string, string>;
   orderBy: Record<string, string>;
   from: string;
+  joins: Record<string, string>;
   limit: number | undefined;
   offset: number | undefined;
+  fill: string | undefined;
 }
 
 export function createSqlBuilder() {
@@ -17,13 +19,15 @@ export function createSqlBuilder() {
 
   const sb: SqlBuilderObject = {
     where: {},
-    from: TABLE_NAMES.events,
+    from: `${TABLE_NAMES.events} e`,
     select: {},
     groupBy: {},
     orderBy: {},
     having: {},
+    joins: {},
     limit: undefined,
     offset: undefined,
+    fill: undefined,
   };
 
   const getWhere = () =>
@@ -39,6 +43,9 @@ export function createSqlBuilder() {
     Object.keys(sb.orderBy).length ? `ORDER BY ${join(sb.orderBy, ', ')}` : '';
   const getLimit = () => (sb.limit ? `LIMIT ${sb.limit}` : '');
   const getOffset = () => (sb.offset ? `OFFSET ${sb.offset}` : '');
+  const getJoins = () =>
+    Object.keys(sb.joins).length ? join(sb.joins, ' ') : '';
+  const getFill = () => (sb.fill ? `WITH FILL ${sb.fill}` : '');
 
   return {
     sb,
@@ -49,16 +56,20 @@ export function createSqlBuilder() {
     getGroupBy,
     getOrderBy,
     getHaving,
+    getJoins,
+    getFill,
     getSql: () => {
       const sql = [
         getSelect(),
         getFrom(),
+        getJoins(),
         getWhere(),
         getGroupBy(),
         getHaving(),
         getOrderBy(),
         getLimit(),
         getOffset(),
+        getFill(),
       ]
         .filter(Boolean)
         .join(' ');

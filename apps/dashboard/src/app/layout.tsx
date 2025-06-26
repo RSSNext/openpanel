@@ -5,6 +5,7 @@ import Providers from './providers';
 
 import '@/styles/globals.css';
 import 'flag-icons/css/flag-icons.min.css';
+import 'katex/dist/katex.min.css';
 
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
@@ -29,7 +30,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          'grainy min-h-screen bg-def-100 font-sans text-base antialiased',
+          'grainy min-h-screen bg-def-100 font-sans text-base antialiased leading-normal',
           GeistSans.variable,
           GeistMono.variable,
         )}

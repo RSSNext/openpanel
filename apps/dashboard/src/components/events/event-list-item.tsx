@@ -16,7 +16,7 @@ import { EventIcon } from './event-icon';
 type EventListItemProps = IServiceEventMinimal | IServiceEvent;
 
 export function EventListItem(props: EventListItemProps) {
-  const { organizationSlug, projectId } = useAppParams();
+  const { organizationId, projectId } = useAppParams();
   const { createdAt, name, path, duration, meta } = props;
   const profile = 'profile' in props ? props.profile : null;
 
@@ -56,6 +56,8 @@ export function EventListItem(props: EventListItemProps) {
           if (!isMinimal) {
             pushModal('EventDetails', {
               id: props.id,
+              projectId,
+              createdAt,
             });
           }
         }}
@@ -88,7 +90,7 @@ export function EventListItem(props: EventListItemProps) {
               onClick={(e) => {
                 e.stopPropagation();
               }}
-              href={`/${organizationSlug}/${projectId}/profiles/${profile?.id}`}
+              href={`/${organizationId}/${projectId}/profiles/${profile?.id}`}
               className="max-w-[80px] overflow-hidden text-ellipsis whitespace-nowrap  text-muted-foreground hover:underline"
             >
               {getProfileName(profile)}

@@ -1,6 +1,7 @@
 // biome-ignore format: annoying
 
 const data = {
+  amazon: 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Amazon_icon.svg',
   'chromium os': 'https://upload.wikimedia.org/wikipedia/commons/2/28/Chromium_Logo.svg',
   'mac os': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/MacOS_logo.svg/1200px-MacOS_logo.svg.png',
   apple: 'https://sladesportfolio.wordpress.com/wp-content/uploads/2015/08/apple_logo_black-svg.png',
@@ -20,7 +21,7 @@ const data = {
   'samsung internet': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Samsung_Internet_logo.svg/1024px-Samsung_Internet_logo.svg.png',
   'vstat.info': 'https://vstat.info',
   'yahoo!': 'https://yahoo.com',
-  android: 'https://image.similarpng.com/very-thumbnail/2020/08/Android-icon-on-transparent--background-PNG.png',
+  android: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Android_robot.svg/1745px-Android_robot.svg.png',
   'android browser': 'https://image.similarpng.com/very-thumbnail/2020/08/Android-icon-on-transparent--background-PNG.png',
   silk: 'https://m.media-amazon.com/images/I/51VCjQCvF0L.png',
   kakaotalk: 'https://www.kakaocorp.com/',

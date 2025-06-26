@@ -1,12 +1,6 @@
 // @ts-expect-error
 import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin';
 
-/**
- * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
- * for Docker builds.
- */
-await import('./src/env.mjs');
-
 /** @type {import("next").NextConfig} */
 const config = {
   output: 'standalone',
@@ -25,6 +19,7 @@ const config = {
     '@openpanel/constants',
     '@openpanel/redis',
     '@openpanel/validation',
+    '@openpanel/email',
   ],
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
@@ -34,6 +29,7 @@ const config = {
       'bullmq',
       'ioredis',
       '@hyperdx/node-opentelemetry',
+      '@node-rs/argon2',
     ],
     instrumentationHook: !!process.env.ENABLE_INSTRUMENTATION_HOOK,
   },

@@ -1,6 +1,6 @@
-import { auth } from '@clerk/nextjs/server';
-
 import { cacheable } from '@openpanel/redis';
+import { escape } from 'sqlstring';
+import { TABLE_NAMES, chQuery } from '../clickhouse/client';
 import type { Prisma, Project } from '../prisma-client';
 import { db } from '../prisma-client';
 
@@ -44,10 +44,10 @@ export async function getProjectWithClients(id: string) {
   return res;
 }
 
-export async function getProjectsByOrganizationSlug(organizationSlug: string) {
+export async function getProjectsByOrganizationId(organizationId: string) {
   return db.project.findMany({
     where: {
-      organizationSlug,
+      organizationId,
     },
     orderBy: {
       createdAt: 'desc',
@@ -55,16 +55,21 @@ export async function getProjectsByOrganizationSlug(organizationSlug: string) {
   });
 }
 
-export async function getCurrentProjects(organizationSlug: string) {
-  const session = auth();
-  if (!session.userId) {
+export async function getProjects({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId: string | null;
+}) {
+  if (!userId) {
     return [];
   }
 
   const [projects, members, access] = await Promise.all([
     db.project.findMany({
       where: {
-        organizationSlug,
+        organizationId,
       },
       orderBy: {
         eventsCount: 'desc',
@@ -72,14 +77,14 @@ export async function getCurrentProjects(organizationSlug: string) {
     }),
     db.member.findMany({
       where: {
-        userId: session.userId,
-        organizationId: organizationSlug,
+        userId,
+        organizationId,
       },
     }),
     db.projectAccess.findMany({
       where: {
-        userId: session.userId,
-        organizationId: organizationSlug,
+        userId,
+        organizationId,
       },
     }),
   ]);
@@ -96,3 +101,10 @@ export async function getCurrentProjects(organizationSlug: string) {
 
   return projects;
 }
+
+export const getProjectEventsCount = async (projectId: string) => {
+  const res = await chQuery<{ count: number }>(
+    `SELECT count(*) as count FROM ${TABLE_NAMES.events} WHERE project_id = ${escape(projectId)}`,
+  );
+  return res[0]?.count;
+};

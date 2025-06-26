@@ -22,7 +22,7 @@ const TooltipContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 overflow-hidden rounded-md border bg-popover-foreground px-3 py-1.5  text-popover shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'z-50 rounded-md border bg-background p-4 py-2.5 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         className,
       )}
       {...props}
@@ -41,6 +41,7 @@ interface TooltiperProps {
   tooltipClassName?: string;
   onClick?: () => void;
   side?: 'top' | 'right' | 'bottom' | 'left';
+  align?: 'start' | 'center' | 'end';
   delayDuration?: number;
   sideOffset?: number;
   disabled?: boolean;
@@ -56,11 +57,17 @@ export function Tooltiper({
   delayDuration = 0,
   sideOffset = 10,
   disabled = false,
+  align,
 }: TooltiperProps) {
   if (disabled) return children;
   return (
     <Tooltip delayDuration={delayDuration}>
-      <TooltipTrigger asChild={asChild} className={className} onClick={onClick}>
+      <TooltipTrigger
+        asChild={asChild}
+        className={className}
+        onClick={onClick}
+        type="button"
+      >
         {children}
       </TooltipTrigger>
       <TooltipPortal>
@@ -68,6 +75,7 @@ export function Tooltiper({
           sideOffset={sideOffset}
           side={side}
           className={tooltipClassName}
+          align={align}
         >
           {content}
         </TooltipContent>

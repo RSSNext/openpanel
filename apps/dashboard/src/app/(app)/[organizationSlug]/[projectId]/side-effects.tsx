@@ -1,39 +1,41 @@
 'use client';
 
-import { pushModal, useOnPushModal } from '@/modals';
-import { useUser } from '@clerk/nextjs';
-import { differenceInDays } from 'date-fns';
-import { useEffect } from 'react';
+import { differenceInHours } from 'date-fns';
+import { useEffect, useState } from 'react';
 
+import { ProjectLink } from '@/components/links';
+import { Combobox } from '@/components/ui/combobox';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ModalHeader } from '@/modals/Modal/Container';
+import type { IServiceOrganization } from '@openpanel/db';
 import { useOpenPanel } from '@openpanel/nextjs';
+import { FREE_PRODUCT_IDS } from '@openpanel/payments';
+import Billing from './settings/organization/organization/billing';
+import SideEffectsFreePlan from './side-effects-free-plan';
+import SideEffectsTimezone from './side-effects-timezone';
+import SideEffectsTrial from './side-effects-trial';
 
-export default function SideEffects() {
-  const op = useOpenPanel();
-  const { user } = useUser();
-  const accountAgeInDays = differenceInDays(
-    new Date(),
-    user?.createdAt || new Date(),
-  );
-  useOnPushModal('Testimonial', (open) => {
-    if (!open) {
-      user?.update({
-        unsafeMetadata: {
-          ...user.unsafeMetadata,
-          testimonial: new Date().toISOString(),
-        },
-      });
-    }
-  });
+interface SideEffectsProps {
+  organization: IServiceOrganization;
+}
 
-  const showTestimonial =
-    user && !user.unsafeMetadata.testimonial && accountAgeInDays > 7;
+export default function SideEffects({ organization }: SideEffectsProps) {
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (showTestimonial) {
-      pushModal('Testimonial');
-      op.track('testimonials_shown');
-    }
-  }, [showTestimonial]);
+    setMounted(true);
+  }, []);
 
-  return null;
+  // Avoids hydration errors
+  if (!mounted) {
+    return null;
+  }
+
+  return (
+    <>
+      <SideEffectsTimezone organization={organization} />
+      <SideEffectsTrial organization={organization} />
+      <SideEffectsFreePlan organization={organization} />
+    </>
+  );
 }
